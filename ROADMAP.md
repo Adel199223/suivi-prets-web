@@ -13,7 +13,7 @@
 
 ## Stage 3
 
-- Ship workbook import preview and merge
+- Ship direct `.ods` import preview and merge in-app
 - Validate first private migration only after the importer is stable
 
 ## Stage 4
@@ -24,10 +24,10 @@
 ## Immediate Priorities
 
 1. Run the first larger private workbook migration with the current preview workflow.
-   The four-debt import is now replayed cleanly with zero issues, so the next real product step is to validate the import flow on a broader private workbook using the same conservative parser and local-resolution escape hatch if needed.
+   The four-debt import is now replayed cleanly with zero issues, and the app can now parse `.ods` workbooks directly in-browser, so the next real product step is to validate that broader migration flow on a larger private workbook using the same conservative parser and local-resolution escape hatch if needed.
 2. Keep the product model stable while doing the above.
    The next pass should not redesign borrower, debt, ledger, import, backup, or dedupe contracts unless a concrete correctness bug requires it.
 
 ## Next Session Anchor
 
-Continue from `ROADMAP.md` in `/home/fa507/dev/suivi-prets-web`. The local preview-generator import flow is implemented, the direct `xlsx` dependency has been removed, the large main-bundle warning is gone, the first private four-debt import has been replayed locally with a fingerprint-guarded manual resolution and exported as a fresh private backup artifact, backup freshness plus restore confirmation are in place, and responsive polish has landed across the main surfaces. The next recommended step is to attempt the first larger private workbook migration when the next workbook is available.
+Continue from `ROADMAP.md` in `/home/fa507/dev/suivi-prets-web`. Direct in-app `.ods` import with deterministic preview and same-session merge is now implemented, the direct `xlsx` dependency has been removed, workbook parsing is lazy-loaded outside the main chunk, the first private four-debt import has been replayed locally with a fingerprint-guarded manual resolution and exported as a fresh private backup artifact, backup freshness plus restore confirmation are in place, and responsive polish has landed across the main surfaces. The next recommended step is to attempt the first larger private workbook migration when the next workbook is available.

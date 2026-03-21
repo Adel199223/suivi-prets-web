@@ -18,7 +18,8 @@ The product is designed around fast daily money tracking:
 - Dashboard, borrower view, debt view, and import/backup center are implemented.
 - Mobile and tablet responsive polish has been applied across the app shell, debt surfaces, and trust center layouts.
 - JSON export, restore confirmation, and backup freshness guidance are implemented.
-- WSL-local `.ods` preview generation and app-side preview JSON merge are implemented.
+- Direct in-app `.ods` import with deterministic preview and same-session merge is implemented.
+- The WSL-local `.ods` preview generator remains available as an operator fallback for fixtures, regression checks, and exceptional private review work.
 - Fingerprint-guarded local resolution files can patch truly ambiguous workbook rows before preview generation.
 - Docs harness, validators, and browser validation harness are implemented.
 - The first private four-debt import has been executed locally, replayed with a zero-issue resolved preview, and exported as a fresh private backup.
@@ -30,7 +31,8 @@ The product is designed around fast daily money tracking:
 - Vite 8
 - TypeScript 5
 - Dexie for IndexedDB
-- Python 3 standard-library ODS preview generator for local workbook parsing
+- `fflate` plus browser XML parsing for lazy-loaded in-app `.ods` analysis
+- Python 3 standard-library ODS preview generator for local fallback parsing
 - Vitest + Testing Library for tests
 - Playwright for repo-owned browser validation
 
@@ -64,13 +66,17 @@ All monetary values are stored in integer euro cents.
 ## Workbook Import Model
 
 - Imports stay local and never upload files anywhere.
-- `tooling/import_workbook_preview.py` converts a workbook-family `.ods` file into a versioned `workbook-import-preview-v1` JSON artifact.
+- The primary user flow is: choose a workbook-family `.ods` file in the app, review the deterministic preview, then merge into the same browser session.
+- The browser parser produces the existing `workbook-import-preview-v1` shape internally so repository merge and dedupe rules stay stable.
+- JSON is for backup export and backup restore only. It is not the primary end-user import format.
+- `tooling/import_workbook_preview.py` still converts a workbook-family `.ods` file into a versioned `workbook-import-preview-v1` JSON artifact for operator fallback use.
 - When a row is truly ambiguous, the preview generator can also consume a local `workbook-import-resolutions-v1` file keyed by workbook fingerprint and sheet/row location.
-- The app imports that preview artifact instead of parsing raw workbooks in the browser.
 - The importer targets the existing workbook family, not arbitrary spreadsheets.
 - It reads real operation rows from the detail columns and uses summary-side values only when the detail side is missing.
 - Annual total rows, placeholder rows, and blank rows are ignored.
 - Continuation rows can inherit the previous resolved period only when the workbook structure makes that relationship explicit.
+- Non-`dette_*` sheets are ignored and treated as informational, not blocking.
+- Ambiguous rows block final import; the app does not partially import by default.
 - Repeated imports dedupe by normalized entry signature instead of workbook hash alone.
 - Merge results are recorded in `ImportSession`.
 
@@ -108,5 +114,5 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:ui"
 - Data safety depends on backups and the browser storage policy.
 - Real workbook files, generated preview artifacts, and private imported backups must stay out of git.
 - Raw workbook parsing no longer ships in the main client bundle.
-- Local resolution files are an operator escape hatch for ambiguous rows, not a replacement for conservative parser rules.
-- The next recommended product step is to run a larger private workbook migration with the current preview-plus-resolution workflow when the next workbook is available.
+- Local resolution files are an operator escape hatch for ambiguous rows, not the normal end-user workflow and not a replacement for conservative parser rules.
+- The next recommended product step is to run a larger private workbook migration with the current direct `.ods` import workflow when the next workbook is available.

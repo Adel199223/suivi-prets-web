@@ -21,19 +21,20 @@ If this guide conflicts with technical docs, `APP_KNOWLEDGE.md` and source code 
 1. Create an emprunteur.
 2. Add one or more dettes under that emprunteur.
 3. Record each payment as soon as it arrives.
-4. Generate a local preview JSON from the existing `.ods` spreadsheet, then use the import page to merge that preview.
-5. Export a sauvegarde after each import and at the end of each real data-entry session.
+4. Open the import page, choose the `.ods` spreadsheet directly in the app, review the preview, then confirm the import.
+5. Export a sauvegarde JSON after each import and at the end of each real data-entry session.
 
 ## Terms in Plain English
 
 - Emprunteur: the person who owes money.
 - Dette: one separate amount owed by that person.
 - Ecriture: one money event, like a payment or a new advance.
-- Apercu d'import: the local JSON file generated from the workbook before you merge it.
-- Sauvegarde: a JSON copy of the local data.
+- Apercu d'import: the on-screen check that shows what the `.ods` file would add before you merge it.
+- Sauvegarde: a JSON copy of the local data in this browser.
 
 ## Backup Safety
 
 1. Watch the trust center reminder after any import, payment, advance, or notes change.
 2. Export a new backup whenever the app says the previous one is missing or stale.
 3. Read the restore summary before confirming, because restore replaces the current local data.
+4. Remember that imported or restored data appears in the same browser and device you are using now.

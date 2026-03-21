@@ -37,4 +37,4 @@ Replace the user-facing JSON preview import path with a direct `.ods` workflow i
 
 ## Completion Notes
 
-Start from `main` after the responsive polish, backup hardening, and private import replay work is already pushed. The current app still expects a preview JSON file from the operator; this pass should remove that confusion without changing storage contracts or import merge semantics.
+Completed on March 21, 2026. The app now lazy-loads a browser `.ods` parser, previews detected borrowers and debts before merge, blocks ambiguous rows in-app, and keeps JSON only for backup/restore. The Python preview generator remains in the repo as an operator fallback for fixture generation, regression comparison, and exceptional private review work.
