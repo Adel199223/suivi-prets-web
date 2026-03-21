@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "canonical": {
+    "app": "APP_KNOWLEDGE.md",
+    "runbook": "agent.md"
+  },
+  "bridges": {
+    "assistant_app": "docs/assistant/APP_KNOWLEDGE.md",
+    "index": "docs/assistant/INDEX.md",
+    "persistence": "docs/assistant/LOCAL_PERSISTENCE_KNOWLEDGE.md"
+  },
+  "user_guides": [
+    "docs/assistant/features/APP_USER_GUIDE.md",
+    "docs/assistant/features/DEBT_TRACKING_USER_GUIDE.md"
+  ],
+  "workflows": [
+    {
+      "id": "loan_ledger",
+      "doc": "docs/assistant/workflows/LOAN_LEDGER_WORKFLOW.md",
+      "scope": "Borrower, debt, payment, advance, adjustment, balance, and close or reopen behavior.",
+      "primary_files": ["src/domain/ledger.ts", "src/lib/repository.ts", "src/App.tsx"],
+      "targeted_tests": ["src/domain/ledger.test.ts", "src/App.test.tsx"],
+      "validation_commands": ["npm test", "npm run validate:ui"]
+    },
+    {
+      "id": "import_merge",
+      "doc": "docs/assistant/workflows/IMPORT_MERGE_WORKFLOW.md",
+      "scope": "Workbook-family parsing, dedupe, preview, anomaly review, and merge logic.",
+      "primary_files": ["src/domain/importWorkbook.ts", "src/lib/repository.ts", "src/App.tsx"],
+      "targeted_tests": ["src/domain/importWorkbook.test.ts", "src/App.test.tsx"],
+      "validation_commands": ["npm test", "npm run validate:ui"]
+    },
+    {
+      "id": "ui_surface_validation",
+      "doc": "docs/assistant/workflows/UI_SURFACE_VALIDATION_WORKFLOW.md",
+      "scope": "Browser validation, layout, hierarchy, responsive behavior, and artifact capture.",
+      "primary_files": ["src/App.tsx", "src/index.css", "tooling/validate-ui-surface.mjs"],
+      "targeted_tests": ["src/App.test.tsx", "test/tooling/validate-ui-surface.test.ts"],
+      "validation_commands": ["npm run validate:ui"]
+    },
+    {
+      "id": "localization",
+      "doc": "docs/assistant/workflows/LOCALIZATION_WORKFLOW.md",
+      "scope": "French-first copy and terminology alignment.",
+      "primary_files": ["src/App.tsx", "docs/assistant/LOCALIZATION_GLOSSARY.md"],
+      "targeted_tests": ["npm test"],
+      "validation_commands": ["npm run validate:agent-docs"]
+    },
+    {
+      "id": "workspace_performance",
+      "doc": "docs/assistant/workflows/PERFORMANCE_WORKFLOW.md",
+      "scope": "Workspace hygiene and performance defaults.",
+      "primary_files": [".vscode/settings.json", "docs/assistant/PERFORMANCE_BASELINES.md"],
+      "targeted_tests": ["test/tooling/validate-workspace-hygiene.test.ts"],
+      "validation_commands": ["npm run validate:workspace-hygiene"]
+    },
+    {
+      "id": "reference_discovery",
+      "doc": "docs/assistant/workflows/REFERENCE_DISCOVERY_WORKFLOW.md",
+      "scope": "Named-product inspiration or parity decisions.",
+      "primary_files": ["docs/assistant/workflows/REFERENCE_DISCOVERY_WORKFLOW.md"],
+      "targeted_tests": ["npm run validate:agent-docs"],
+      "validation_commands": ["npm run validate:agent-docs"]
+    },
+    {
+      "id": "ci_repo_ops",
+      "doc": "docs/assistant/workflows/CI_REPO_WORKFLOW.md",
+      "scope": "Validation commands, repo checks, and CI-safe routines.",
+      "primary_files": ["package.json", "tooling/validate-agent-docs.mjs"],
+      "targeted_tests": ["test/tooling/validate-agent-docs.test.ts"],
+      "validation_commands": ["npm run validate:agent-docs", "npm run validate:workspace-hygiene"]
+    },
+    {
+      "id": "commit_publish_ops",
+      "doc": "docs/assistant/workflows/COMMIT_PUBLISH_WORKFLOW.md",
+      "scope": "Branch safety, staging, validation, and push hygiene.",
+      "primary_files": ["docs/assistant/workflows/COMMIT_PUBLISH_WORKFLOW.md"],
+      "targeted_tests": ["npm run validate:agent-docs"],
+      "validation_commands": ["npm run validate:agent-docs"]
+    },
+    {
+      "id": "docs_maintenance",
+      "doc": "docs/assistant/workflows/DOCS_MAINTENANCE_WORKFLOW.md",
+      "scope": "Assistant-doc maintenance and docs-sync rules.",
+      "primary_files": ["APP_KNOWLEDGE.md", "agent.md", "docs/assistant/INDEX.md"],
+      "targeted_tests": ["test/tooling/validate-agent-docs.test.ts"],
+      "validation_commands": ["npm run validate:agent-docs"]
+    }
+  ],
+  "global_commands": [
+    "wsl.exe bash -lc \"cd /home/fa507/dev/suivi-prets-web && npm test\"",
+    "wsl.exe bash -lc \"cd /home/fa507/dev/suivi-prets-web && npm run lint\"",
+    "wsl.exe bash -lc \"cd /home/fa507/dev/suivi-prets-web && npm run build\"",
+    "wsl.exe bash -lc \"cd /home/fa507/dev/suivi-prets-web && npm run validate:agent-docs\"",
+    "wsl.exe bash -lc \"cd /home/fa507/dev/suivi-prets-web && npm run validate:workspace-hygiene\"",
+    "wsl.exe bash -lc \"cd /home/fa507/dev/suivi-prets-web && npm run validate:ui\""
+  ],
+  "contracts": {
+    "template_read_policy": "docs/assistant/templates/* is read-only template material.",
+    "post_change_docs_sync_prompt_policy": "After significant implementation changes, ask exactly: Would you like me to run Assistant Docs Sync for this change now?",
+    "sub_agent_routing_policy": "The main agent owns final integration. Sub-agents are for narrow, bounded tasks only.",
+    "validation_environment_policy": "Use WSL-safe wrappers from this environment for commands.",
+    "artifact_capture_policy": "UI validation artifacts live under output/playwright/.",
+    "validation_fallback_policy": "If the broad browser pass is unavailable, use targeted tests plus a narrower repo-owned harness path.",
+    "user_guides_support_usage_policy": "Support and plain-language explanation tasks should start from the user guides.",
+    "user_guides_canonical_deference_policy": "User guides defer to canonical technical docs when details conflict.",
+    "user_guides_update_sync_policy": "Update user guides only when the confirmed change affects end-user behavior.",
+    "golden_principles_source_of_truth": "docs/assistant/GOLDEN_PRINCIPLES.md",
+    "execplan_policy": "Major or multi-file work should use an ExecPlan under docs/assistant/exec_plans/active/.",
+    "approval_gates_policy": "Approval gates are defined in AGENTS.md and agent.md.",
+    "worktree_isolation_policy": "Use branches or worktrees for major parallel changes.",
+    "local_persistence_source_of_truth": "docs/assistant/LOCAL_PERSISTENCE_KNOWLEDGE.md",
+    "ui_surface_validation_policy": "docs/assistant/workflows/UI_SURFACE_VALIDATION_WORKFLOW.md is the browser-validation source of truth.",
+    "benchmark_matrix_policy": "Only create benchmark matrices for parity-sensitive UI work.",
+    "inspiration_reference_discovery_policy": "Named-product inspiration requests must route through REFERENCE_DISCOVERY_WORKFLOW.md first."
+  },
+  "last_updated": "2026-03-20"
+}
