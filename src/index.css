@@ -232,7 +232,9 @@ h4 {
 .dual-stack,
 .list-stack,
 .table-stack,
-.issue-list {
+.issue-list,
+.preview-panel,
+.preview-block {
   display: grid;
   gap: 0.85rem;
 }
@@ -263,6 +265,7 @@ h4 {
 .borrower-row,
 .activity-row,
 .issue-row,
+.preview-row,
 .table-row {
   padding: 0.95rem 1rem;
   border-radius: 20px;
@@ -292,6 +295,19 @@ h4 {
 
 .secondary-button {
   background: #d48349;
+}
+
+.preview-grid {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.preview-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
 }
 
 .ghost-button {
@@ -381,6 +397,11 @@ h4 {
   color: rgba(29, 46, 46, 0.82);
 }
 
+.notice-panel-warning {
+  background: rgba(248, 225, 205, 0.78);
+  color: #6a3c0d;
+}
+
 @media (max-width: 1100px) {
   .app-shell {
     padding: 1rem;
@@ -397,6 +418,10 @@ h4 {
 
 @media (max-width: 900px) {
   .split-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-grid {
     grid-template-columns: 1fr;
   }
 
@@ -500,6 +525,7 @@ h4 {
   .borrower-row,
   .activity-row,
   .issue-row,
+  .preview-row,
   .table-row {
     padding: 0.85rem 0.9rem;
     border-radius: 18px;

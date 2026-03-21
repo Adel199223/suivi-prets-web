@@ -9,7 +9,8 @@ import { createEmptySnapshot } from './domain/ledger'
 import type { AppSnapshot, EntryKind, WorkbookImportPreviewV1 } from './domain/types'
 import { downloadJson, parseBackupFile, serializeBackup, summarizeBackup } from './lib/backup'
 import { deriveBackupHealth } from './lib/backupHealth'
-import { parseImportPreviewFile } from './lib/importPreview'
+import { getBlockingImportIssues } from './lib/importIssues'
+import { parseImportWorkbookFile } from './lib/importWorkbook'
 import { addLedgerEntry, applyImportPreview, buildSnapshot, createBorrower, createDebt, exportBackup, replaceFromBackup, setDebtClosed, updateBorrowerNotes, updateDebtNotes } from './lib/repository'
 import { getStorageStatus, requestPersistentStorage, type StorageStatus } from './lib/storagePersistence'
 
@@ -68,6 +69,7 @@ export default function App() {
   const navigate = useNavigate()
   const [flash, setFlash] = useState<string | null>(null)
   const [importArtifact, setImportArtifact] = useState<WorkbookImportPreviewV1 | null>(null)
+  const [isImportLoading, setIsImportLoading] = useState(false)
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null)
   const backupHealth = deriveBackupHealth(snapshot)
 
@@ -106,13 +108,22 @@ export default function App() {
     announce(input.kind === 'payment' ? 'Paiement enregistre.' : 'Avance enregistree.')
   }
 
-  async function handleImportPreviewSelect(file: File) {
+  async function handleImportWorkbookSelect(file: File) {
+    setIsImportLoading(true)
     try {
-      const artifact = await parseImportPreviewFile(file)
+      const artifact = await parseImportWorkbookFile(file)
+      const blockingIssues = getBlockingImportIssues(artifact)
       setImportArtifact(artifact)
-      announce('Apercu d’import charge.')
+      announce(
+        blockingIssues.length > 0
+          ? 'Classeur analyse. Import bloque tant que les lignes douteuses ne sont pas corrigees.'
+          : 'Classeur analyse. Apercu pret dans cette fenetre.',
+      )
     } catch (error) {
+      setImportArtifact(null)
       announce(error instanceof Error ? error.message : "Impossible de charger l’apercu d’import.")
+    } finally {
+      setIsImportLoading(false)
     }
   }
 
@@ -120,10 +131,15 @@ export default function App() {
     if (!importArtifact) {
       return
     }
+    if (getBlockingImportIssues(importArtifact).length > 0) {
+      announce('Import bloque: corrigez le classeur .ods avant de fusionner.')
+      return
+    }
 
     const session = await applyImportPreview(importArtifact.preview)
     setImportArtifact(null)
-    announce(`Import fusionne: ${session.appliedEntries} ecriture(s) ajoutee(s).`)
+    announce(`Import fusionne dans ce navigateur: ${session.appliedEntries} ecriture(s) ajoutee(s).`)
+    navigate('/')
   }
 
   async function handleExportBackup() {
@@ -147,7 +163,7 @@ export default function App() {
 
       await replaceFromBackup(backup)
       setImportArtifact(null)
-      announce('Sauvegarde restauree.')
+      announce('Sauvegarde restauree dans ce navigateur.')
       navigate('/')
     } catch (error) {
       announce(error instanceof Error ? error.message : 'Impossible de restaurer cette sauvegarde.')
@@ -194,10 +210,11 @@ export default function App() {
             <ImportPage
               backupHealth={backupHealth}
               importArtifact={importArtifact}
+              isImportLoading={isImportLoading}
               importSessions={snapshot.importSessions}
               lastBackupAt={snapshot.lastBackupAt}
               storageStatus={storageStatus}
-              onSelectImportPreview={handleImportPreviewSelect}
+              onSelectImportWorkbook={handleImportWorkbookSelect}
               onApplyImport={handleApplyImport}
               onExportBackup={handleExportBackup}
               onRestoreBackup={handleRestoreBackup}

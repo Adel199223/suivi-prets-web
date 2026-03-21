@@ -1,14 +1,16 @@
 import { formatDate, formatMoney } from '../domain/format'
 import type { BackupHealth, ImportSessionRecord, WorkbookImportPreviewV1 } from '../domain/types'
+import { getBlockingImportIssues, getInformationalImportIssues } from '../lib/importIssues'
 import type { StorageStatus } from '../lib/storagePersistence'
 
 interface ImportPageProps {
   backupHealth: BackupHealth
   importArtifact: WorkbookImportPreviewV1 | null
+  isImportLoading: boolean
   importSessions: ImportSessionRecord[]
   lastBackupAt: string | null
   storageStatus: StorageStatus | null
-  onSelectImportPreview: (file: File) => Promise<void>
+  onSelectImportWorkbook: (file: File) => Promise<void>
   onApplyImport: () => Promise<void>
   onExportBackup: () => Promise<void>
   onRestoreBackup: (file: File) => Promise<void>
@@ -18,16 +20,53 @@ interface ImportPageProps {
 export function ImportPage({
   backupHealth,
   importArtifact,
+  isImportLoading,
   importSessions,
   lastBackupAt,
   storageStatus,
-  onSelectImportPreview,
+  onSelectImportWorkbook,
   onApplyImport,
   onExportBackup,
   onRestoreBackup,
   onRequestPersistence
 }: ImportPageProps) {
   const importPreview = importArtifact?.preview ?? null
+  const blockingIssues = importPreview ? getBlockingImportIssues(importPreview) : []
+  const informationalIssues = importPreview ? getInformationalImportIssues(importPreview) : []
+  const borrowerPreviewRows = importPreview
+    ? Array.from(
+        importPreview.debts
+          .reduce((rows, debt) => {
+            const current = rows.get(debt.borrowerSourceKey)
+            if (current) {
+              current.debtCount += 1
+              current.entryCount += debt.entries.length
+              return rows
+            }
+
+            rows.set(debt.borrowerSourceKey, {
+              borrowerSourceKey: debt.borrowerSourceKey,
+              borrowerName: debt.borrowerName,
+              debtCount: 1,
+              entryCount: debt.entries.length
+            })
+            return rows
+          }, new Map<string, { borrowerSourceKey: string; borrowerName: string; debtCount: number; entryCount: number }>())
+          .values()
+      )
+    : []
+  const debtPreviewRows = importPreview
+    ? importPreview.debts.map((debt) => ({
+        sourceKey: debt.sourceKey,
+        borrowerName: debt.borrowerName,
+        label: debt.label,
+        entryCount: debt.entries.length,
+        outstandingImportedCents: debt.entries.reduce(
+          (sum, entry) => sum + (entry.kind === 'payment' ? -entry.amountCents : entry.amountCents),
+          0
+        )
+      }))
+    : []
 
   return (
     <div className="page-stack">
@@ -36,7 +75,7 @@ export function ImportPage({
           <p className="eyebrow">Import et sauvegarde</p>
           <h1>Centre de confiance</h1>
           <p className="lede">
-            Generez un apercu JSON local depuis le classeur `.ods`, verifiez les lignes douteuses avant validation et exportez un JSON propre pour vos sauvegardes.
+            Importez directement un classeur `.ods` dans cette fenetre, verifiez l’apercu local avant validation et gardez le JSON pour la sauvegarde ou la restauration de ce navigateur.
           </p>
         </div>
         <div className="metric-grid">
@@ -62,31 +101,36 @@ export function ImportPage({
         <section className="section-card">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">Apercu JSON</p>
-              <h2>Charger un apercu d’import</h2>
+              <p className="eyebrow">Classeur .ods</p>
+              <h2>Importer un classeur</h2>
             </div>
           </div>
           <label className="file-label">
-            Charger un apercu JSON
+            Choisir un classeur .ods
             <input
-              aria-label="Charger un apercu JSON"
+              aria-label="Choisir un classeur .ods"
               type="file"
-              accept=".json,application/json"
+              accept=".ods,application/vnd.oasis.opendocument.spreadsheet"
               onChange={(event) => {
-                const file = event.target.files?.[0]
+                const input = event.currentTarget
+                const file = input.files?.[0]
+                input.value = ''
                 if (file) {
-                  void onSelectImportPreview(file)
+                  void onSelectImportWorkbook(file)
                 }
               }}
             />
           </label>
           <p className="section-note">
-            Generez d’abord l’apercu avec <code>npm run import:preview -- --input /chemin/classeur.ods --output output/private/apercu.json</code>.
+            Les donnees importees seront visibles dans ce navigateur, sur cet appareil, des que vous validez la fusion.
           </p>
+          {isImportLoading ? <p className="section-note">Analyse du classeur en cours...</p> : null}
           {importPreview ? (
             <div className="preview-panel">
-              <h3>Apercu de {importPreview.fileName}</h3>
-              <p className="section-note">Artefact genere le {formatDate(importArtifact?.generatedAt ?? null)}.</p>
+              <h3>Resultat de l’analyse pour {importPreview.fileName}</h3>
+              <p className="section-note">
+                Analyse terminee le {formatDate(importArtifact?.generatedAt ?? null)}. Verifiez les personnes et les dettes ci-dessous avant d’importer dans ce navigateur.
+              </p>
               <div className="mini-metrics">
                 <div className="metric-card">
                   <p className="metric-label">Emprunteurs detectes</p>
@@ -102,14 +146,59 @@ export function ImportPage({
                 </div>
               </div>
               <p className="section-note">
-                {importPreview.summary.entryCount} ecriture(s), {importPreview.issues.length} ligne(s) a revoir.
+                {importPreview.summary.entryCount} ecriture(s), {blockingIssues.length} ligne(s) bloquante(s)
+                {informationalIssues.length > 0 ? `, ${informationalIssues.length} feuille(s) ignoree(s).` : '.'}
               </p>
-              <button type="button" onClick={() => void onApplyImport()}>
-                Fusionner l’import
+              <div className="preview-grid">
+                <section className="preview-block">
+                  <h4>Emprunteurs reperes</h4>
+                  <div className="list-stack">
+                    {borrowerPreviewRows.map((borrower) => (
+                      <article className="preview-row" key={borrower.borrowerSourceKey}>
+                        <div>
+                          <strong>{borrower.borrowerName}</strong>
+                          <p>{borrower.debtCount} dette(s) detectee(s)</p>
+                        </div>
+                        <strong>{borrower.entryCount} ecriture(s)</strong>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+                <section className="preview-block">
+                  <h4>Dettes reperees</h4>
+                  <div className="list-stack">
+                    {debtPreviewRows.map((debt) => (
+                      <article className="preview-row" key={debt.sourceKey}>
+                        <div>
+                          <strong>
+                            {debt.borrowerName} · {debt.label}
+                          </strong>
+                          <p>{debt.entryCount} ecriture(s) detectee(s)</p>
+                        </div>
+                        <strong>{formatMoney(debt.outstandingImportedCents)}</strong>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              </div>
+              {informationalIssues.length > 0 ? (
+                <div className="notice-panel notice-panel-empty">
+                  <strong>{informationalIssues.length} feuille(s) hors famille dette ignoree(s).</strong>
+                  <p className="section-note">Le systeme ne garde que les feuilles `dette_*` pertinentes pour la fusion.</p>
+                </div>
+              ) : null}
+              {blockingIssues.length > 0 ? (
+                <div className="notice-panel notice-panel-warning">
+                  <strong>Import bloque tant que le fichier reste ambigu.</strong>
+                  <p className="section-note">Corrigez les lignes ci-dessous dans le classeur, puis rechargez le fichier `.ods`.</p>
+                </div>
+              ) : null}
+              <button type="button" disabled={blockingIssues.length > 0} onClick={() => void onApplyImport()}>
+                Importer ce classeur
               </button>
-              {importPreview.issues.length > 0 ? (
+              {blockingIssues.length > 0 ? (
                 <div className="issue-list">
-                  {importPreview.issues.map((issue) => (
+                  {blockingIssues.map((issue) => (
                     <article className="issue-row" key={`${issue.sheetName}-${issue.rowNumber}-${issue.code}`}>
                       <strong>
                         {issue.sheetName} · ligne {issue.rowNumber}
@@ -121,7 +210,7 @@ export function ImportPage({
               ) : null}
             </div>
           ) : (
-            <p className="empty-state">Choisissez un apercu `.json` genere localement pour voir la fusion avant validation.</p>
+            <p className="empty-state">Choisissez un fichier `.ods` pour voir ce qui sera importe dans cette fenetre avant validation.</p>
           )}
         </section>
 
@@ -129,7 +218,7 @@ export function ImportPage({
           <div className="section-heading">
             <div>
               <p className="eyebrow">Sauvegarde JSON</p>
-              <h2>Exporter ou restaurer</h2>
+              <h2>Sauvegarder ou restaurer</h2>
             </div>
           </div>
           <div className="button-row">
@@ -147,13 +236,16 @@ export function ImportPage({
               type="file"
               accept=".json"
               onChange={(event) => {
-                const file = event.target.files?.[0]
+                const input = event.currentTarget
+                const file = input.files?.[0]
+                input.value = ''
                 if (file) {
                   void onRestoreBackup(file)
                 }
               }}
             />
           </label>
+          <p className="section-note">Le JSON sert uniquement a sauvegarder ou restaurer les donnees deja presentes dans ce navigateur.</p>
           <p className="section-note">
             {storageStatus
               ? `Usage estime: ${storageStatus.usageMb ?? '?'} MB / ${storageStatus.quotaMb ?? '?'} MB.`

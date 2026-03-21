@@ -22,3 +22,9 @@ export function buildImportPreviewFile(name: string): File {
     type: 'application/json'
   })
 }
+
+export function buildWorkbookFile(name: string): File {
+  return new File([fs.readFileSync(importFixturePath(name))], name, {
+    type: 'application/vnd.oasis.opendocument.spreadsheet'
+  })
+}

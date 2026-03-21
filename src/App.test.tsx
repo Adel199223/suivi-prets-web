@@ -1,21 +1,22 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import App from './App'
 import { exportBackup, resetAllData } from './lib/repository'
-import { serializeBackup } from './lib/backup'
-import { buildImportPreviewFile } from '../test/fixtures/import/files'
+import * as backupModule from './lib/backup'
+import { buildWorkbookFile } from '../test/fixtures/import/files'
 
 describe('App', () => {
   beforeEach(async () => {
     await resetAllData()
-    vi.stubGlobal('URL', {
-      ...URL,
-      createObjectURL: vi.fn(() => 'blob:test'),
-      revokeObjectURL: vi.fn()
-    })
+    vi.spyOn(backupModule, 'downloadJson').mockImplementation(() => {})
     vi.stubGlobal('confirm', vi.fn(() => true))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
   })
 
   it('supports the main borrower and debt workflow plus backup export and restore', async () => {
@@ -54,19 +55,24 @@ describe('App', () => {
     await screen.findByRole('heading', { name: /centre de confiance/i })
     await user.click(screen.getByRole('button', { name: /exporter la sauvegarde/i }))
     await waitFor(() => {
-      expect(URL.createObjectURL).toHaveBeenCalled()
+      expect(backupModule.downloadJson).toHaveBeenCalled()
     })
 
-    const backup = await exportBackup()
-    await resetAllData()
-    const backupFile = new File([serializeBackup(backup)], 'restore.json', { type: 'application/json' })
+    let backup!: Awaited<ReturnType<typeof exportBackup>>
+    await act(async () => {
+      backup = await exportBackup()
+    })
+    await act(async () => {
+      await resetAllData()
+    })
+    const backupFile = new File([backupModule.serializeBackup(backup)], 'restore.json', { type: 'application/json' })
     await user.upload(screen.getByLabelText(/restaurer une sauvegarde json/i), backupFile)
     expect(window.confirm).toHaveBeenCalled()
     await screen.findByText(/sauvegarde restauree/i)
     await screen.findByText(/amina/i)
   })
 
-  it('imports a workbook preview and merges it into the app', async () => {
+  it('imports a workbook .ods file and shows the merged data in the same app session', async () => {
     const user = userEvent.setup()
     render(
       <MemoryRouter initialEntries={['/import']}>
@@ -75,10 +81,29 @@ describe('App', () => {
     )
 
     await screen.findByRole('heading', { name: /centre de confiance/i })
-    await user.upload(screen.getByLabelText(/charger un apercu json/i), buildImportPreviewFile('partial-preview.json'))
-    await screen.findByText(/apercu d’import charge/i)
-    await screen.findByText(/emprunteurs detectes/i)
-    await user.click(screen.getByRole('button', { name: /fusionner l’import/i }))
-    await screen.findByText(/import fusionne/i)
+    await user.upload(screen.getByLabelText(/choisir un classeur \.ods/i), buildWorkbookFile('partial-workbook.ods'))
+    await screen.findByText(/classeur analyse/i)
+    await screen.findByRole('heading', { name: /emprunteurs reperes/i })
+    await screen.findByText('Adel')
+    await screen.findByText('Fatiha')
+    await user.click(screen.getByRole('button', { name: /importer ce classeur/i }))
+    await screen.findByText(/import fusionne dans ce navigateur/i)
+    await screen.findByRole('link', { name: /adel/i })
+    await screen.findByRole('link', { name: /fatiha/i })
+  })
+
+  it('blocks final import when the workbook still has ambiguous rows', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/import']}>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByRole('heading', { name: /centre de confiance/i })
+    await user.upload(screen.getByLabelText(/choisir un classeur \.ods/i), buildWorkbookFile('broken-workbook.ods'))
+    await screen.findByText(/import bloque tant que le fichier reste ambigu/i)
+    expect(screen.getByRole('button', { name: /importer ce classeur/i })).toBeDisabled()
+    expect(screen.getByText(/ligne 2/i)).toBeInTheDocument()
   })
 })
