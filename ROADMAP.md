@@ -23,14 +23,13 @@
 
 ## Immediate Priorities
 
-1. Replace or isolate the direct `xlsx` dependency before importing real private workbooks.
-   `npm audit` currently reports one high-severity advisory path against `xlsx`, and `fixAvailable` is currently `false`, so the next session should evaluate safer parser options or a stronger containment strategy before the first private migration.
-2. Reduce the main client bundle size.
-   `npm run build` passes, but Vite warns that the main bundle is large because workbook parsing ships in the main client chunk. The next pass should code-split the import surface or move the parser behind a lazy boundary.
-3. After the parser dependency decision is settled, run the first private import of the four-debt sample locally and review the merged data before using the larger full workbook.
-4. Keep the product model stable while doing the above.
-   The next pass should not redesign borrower, debt, ledger, backup, or dedupe contracts unless one of the priority issues proves that change is necessary.
+1. Harden backups and operator safety.
+   The next pass should add stale-backup warnings after local edits or imports, improve restore confirmation, and make backup cadence guidance clearer in the trust center.
+2. Finish responsive polish.
+   The current app shell and trust center are working, but the next UI pass should tighten mobile and tablet ergonomics without changing the data model.
+3. Keep the product model stable while doing the above.
+   The next pass should not redesign borrower, debt, ledger, import, backup, or dedupe contracts unless a concrete correctness bug requires it.
 
 ## Next Session Anchor
 
-Continue from `ROADMAP.md` and `docs/assistant/exec_plans/active/2026-03-20-v1-foundation.md` in `/home/fa507/dev/suivi-prets-web`. The app shell, local ledger flows, backup flows, workbook-family preview importer, and validation harness are implemented and passing. Before importing real private workbook data, first address the high-severity `xlsx` audit issue or choose a safer import strategy, then reduce the large client bundle warning caused by shipping workbook parsing in the main chunk, and only then run the first private four-debt import without redesigning the core borrower -> debt -> ledger model.
+Continue from `ROADMAP.md` in `/home/fa507/dev/suivi-prets-web`. The local preview-generator import flow is implemented, the direct `xlsx` dependency has been removed, the large main-bundle warning is gone, and the first private four-debt import has been reviewed locally and exported as a private backup artifact. The next recommended step is backup hardening and operator guidance, followed by responsive polish.

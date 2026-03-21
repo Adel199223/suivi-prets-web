@@ -43,4 +43,4 @@ Stand up a local-first debt tracker with a stable data model, assistant harness,
 
 ## Completion Notes
 
-Continue from `ROADMAP.md` and `docs/assistant/exec_plans/active/2026-03-20-v1-foundation.md` in `/home/fa507/dev/suivi-prets-web`. The app shell, local ledger flows, backup flows, workbook-family preview importer, and validation harness are implemented and passing. The current pass replaces the vulnerable browser-side `xlsx` path with a WSL-local preview generator, removes workbook parsing from the main client bundle, runs the first private four-debt import via an ignored preview artifact, makes an implementation commit, performs Assistant docs sync and a docs commit, creates the public GitHub repository, pushes `main`, verifies both local and remote cleanliness, and then continues with backup hardening.
+Completed on 2026-03-21 with the vulnerable browser-side `xlsx` path removed, a WSL-local preview generator in place, the main bundle warning cleared, and the first private four-debt import reviewed locally via ignored preview and backup artifacts. The next recommended follow-up after repo publication is backup hardening and clearer operator guidance.

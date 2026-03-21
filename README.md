@@ -1,6 +1,6 @@
 # Suivi Prets
 
-Application web locale en React/Vite pour suivre des dettes, enregistrer des paiements, ajouter de nouvelles avances et importer un classeur `.ods` de la meme famille que le suivi actuel.
+Application web locale en React/Vite pour suivre des dettes, enregistrer des paiements, ajouter de nouvelles avances et fusionner un apercu JSON local genere depuis un classeur `.ods` de la meme famille que le suivi actuel.
 
 ## Demarrage
 
@@ -10,6 +10,14 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run dev"
 ```
 
 Ouvrir [http://127.0.0.1:4173](http://127.0.0.1:4173).
+
+## Import Local
+
+```powershell
+wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run import:preview -- --input /chemin/classeur.ods --output output/private/apercu.json"
+```
+
+Puis chargez `output/private/apercu.json` depuis la page `Import & sauvegarde`.
 
 ## Validation
 

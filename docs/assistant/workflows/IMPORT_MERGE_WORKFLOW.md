@@ -13,6 +13,7 @@ Use this workflow for workbook-family parsing, preview, dedupe, anomaly review, 
 ## When To Use
 
 - Changing `.ods` parsing
+- Changing the preview JSON artifact contract
 - Changing row normalization
 - Changing merge matching or duplicate suppression
 
@@ -22,25 +23,30 @@ Don't use this workflow when the task is ordinary debt or payment CRUD. Instead 
 
 ## Primary Files
 
-- `src/domain/importWorkbook.ts`
+- `tooling/import_workbook_preview.py`
+- `src/lib/importPreview.ts`
 - `src/lib/repository.ts`
 - `src/App.tsx`
+- `src/app/import-page.tsx`
 
 ## Minimal Commands
 
 ```powershell
+wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run import:preview -- --input /chemin/classeur.ods --output output/private/apercu.json"
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm test"
 ```
 
 ## Targeted Tests
 
-- `src/domain/importWorkbook.test.ts`
+- `test/tooling/import-preview.test.ts`
+- `src/lib/repository.test.ts`
 - `src/App.test.tsx`
 
 ## Failure Modes and Fallback Steps
 
 - If the parser cannot trust a row, raise an issue instead of importing it.
 - If duplicate imports appear, inspect normalized signatures before changing workbook-level matching.
+- If the local preview tool and app disagree, treat the preview artifact contract as the boundary and fix the generator or parser before importing more private data.
 - If the preview is confusing, keep the import conservative and show issues rather than guessing.
 
 ## Handoff Checklist

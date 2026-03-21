@@ -9,7 +9,7 @@
 - `docs/assistant/workflows/LOAN_LEDGER_WORKFLOW.md`
   Use when changing borrower, debt, payment, advance, adjustment, close, or reopen behavior.
 - `docs/assistant/workflows/IMPORT_MERGE_WORKFLOW.md`
-  Use when changing workbook parsing, dedupe, preview, or merge logic.
+  Use when changing the local preview generator, preview artifact contract, dedupe, or merge logic.
 - `docs/assistant/workflows/UI_SURFACE_VALIDATION_WORKFLOW.md`
   Use when changing top-level UI, responsive layout, or browser validation behavior.
 - `docs/assistant/features/APP_USER_GUIDE.md`

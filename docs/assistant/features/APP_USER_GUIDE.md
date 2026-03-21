@@ -21,7 +21,7 @@ If this guide conflicts with technical docs, `APP_KNOWLEDGE.md` and source code 
 1. Create an emprunteur.
 2. Add one or more dettes under that emprunteur.
 3. Record each payment as soon as it arrives.
-4. Use the import page when you want to merge data from the existing spreadsheet.
+4. Generate a local preview JSON from the existing `.ods` spreadsheet, then use the import page to merge that preview.
 5. Export a sauvegarde regularly.
 
 ## Terms in Plain English
@@ -29,4 +29,5 @@ If this guide conflicts with technical docs, `APP_KNOWLEDGE.md` and source code 
 - Emprunteur: the person who owes money.
 - Dette: one separate amount owed by that person.
 - Ecriture: one money event, like a payment or a new advance.
+- Apercu d'import: the local JSON file generated from the workbook before you merge it.
 - Sauvegarde: a JSON copy of the local data.

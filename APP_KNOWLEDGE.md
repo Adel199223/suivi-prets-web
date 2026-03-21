@@ -17,8 +17,9 @@ The product is designed around fast daily money tracking:
 - Local Dexie persistence is implemented.
 - Dashboard, borrower view, debt view, and import/backup center are implemented.
 - JSON export and replace-from-backup flows are implemented.
-- Workbook-family `.ods` import preview and merge logic are implemented.
+- WSL-local `.ods` preview generation and app-side preview JSON merge are implemented.
 - Docs harness, validators, and browser validation harness are implemented.
+- The first private four-debt import has been executed locally via an ignored preview artifact and exported backup.
 - `npm test`, `npm run lint`, `npm run build`, `npm run validate:agent-docs`, `npm run validate:workspace-hygiene`, and `npm run validate:ui` are passing.
 
 ## Tech Stack
@@ -27,7 +28,7 @@ The product is designed around fast daily money tracking:
 - Vite 8
 - TypeScript 5
 - Dexie for IndexedDB
-- SheetJS (`xlsx`) for browser-side workbook parsing
+- Python 3 standard-library ODS preview generator for local workbook parsing
 - Vitest + Testing Library for tests
 - Playwright for repo-owned browser validation
 
@@ -60,7 +61,9 @@ All monetary values are stored in integer euro cents.
 
 ## Workbook Import Model
 
-- Imports are browser-side only and never upload files anywhere.
+- Imports stay local and never upload files anywhere.
+- `tooling/import_workbook_preview.py` converts a workbook-family `.ods` file into a versioned `workbook-import-preview-v1` JSON artifact.
+- The app imports that preview artifact instead of parsing raw workbooks in the browser.
 - The importer targets the existing workbook family, not arbitrary spreadsheets.
 - It reads real operation rows from the detail columns and uses summary-side values only when the detail side is missing.
 - Annual total rows, placeholder rows, and blank rows are ignored.
@@ -84,6 +87,7 @@ Current stores:
 Use WSL-safe wrappers from this environment:
 
 ```powershell
+wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run import:preview -- --input /chemin/classeur.ods --output output/private/apercu.json"
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm test"
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run lint"
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run build"
@@ -97,6 +101,6 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:ui"
 - This is a single-user local-first app for v1.
 - There is no borrower portal, bank sync, or multi-device sync.
 - Data safety depends on backups and the browser storage policy.
-- Real workbook files and real imported JSON snapshots must stay out of git.
-- `npm audit` currently reports one high-severity advisory path against the direct `xlsx` dependency used for workbook parsing.
-- `npm run build` currently passes with a large-bundle warning because workbook parsing is still part of the main client chunk.
+- Real workbook files, generated preview artifacts, and private imported backups must stay out of git.
+- Raw workbook parsing no longer ships in the main client bundle.
+- The next recommended product step is backup hardening and clearer operator guidance around restore safety and backup cadence.
