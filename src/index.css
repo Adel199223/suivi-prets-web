@@ -288,6 +288,29 @@ h4 {
   margin: 0;
 }
 
+.notice-panel {
+  display: grid;
+  gap: 0.45rem;
+  padding: 1rem 1.1rem;
+  border-radius: 22px;
+}
+
+.notice-panel-missing,
+.notice-panel-stale {
+  background: rgba(248, 225, 205, 0.72);
+  color: #6a3c0d;
+}
+
+.notice-panel-current {
+  background: rgba(212, 240, 232, 0.72);
+  color: #184e4d;
+}
+
+.notice-panel-empty {
+  background: rgba(246, 239, 230, 0.76);
+  color: rgba(29, 46, 46, 0.82);
+}
+
 @media (max-width: 900px) {
   .hero-panel,
   .split-grid {

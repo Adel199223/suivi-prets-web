@@ -1,15 +1,16 @@
 import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { formatDate, formatMoney } from '../domain/format'
-import type { AppSnapshot } from '../domain/types'
+import type { AppSnapshot, BackupHealth } from '../domain/types'
 import { MetricCard } from '../components/MetricCard'
 
 interface DashboardPageProps {
   snapshot: AppSnapshot
+  backupHealth: BackupHealth
   onCreateBorrower: (input: { name: string; notes?: string }) => Promise<void>
 }
 
-export function DashboardPage({ snapshot, onCreateBorrower }: DashboardPageProps) {
+export function DashboardPage({ snapshot, backupHealth, onCreateBorrower }: DashboardPageProps) {
   const [name, setName] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -128,11 +129,15 @@ export function DashboardPage({ snapshot, onCreateBorrower }: DashboardPageProps
             <h2>Sauvegarde locale</h2>
           </div>
         </div>
-        <p className="section-note">
-          {snapshot.lastBackupAt
-            ? `Derniere sauvegarde: ${formatDate(snapshot.lastBackupAt)}.`
-            : 'Aucune sauvegarde exportee pour l’instant. Pensez a exporter un JSON depuis la page Import & sauvegarde.'}
-        </p>
+        <div className={`notice-panel notice-panel-${backupHealth.state}`}>
+          <strong>{backupHealth.headline}</strong>
+          <p className="section-note">{backupHealth.detail}</p>
+          <p className="section-note">
+            {snapshot.lastBackupAt
+              ? `Derniere sauvegarde: ${formatDate(snapshot.lastBackupAt)}.`
+              : 'Aucune sauvegarde exportee pour l’instant. Pensez a exporter un JSON depuis la page Import & sauvegarde.'}
+          </p>
+        </div>
       </section>
     </div>
   )

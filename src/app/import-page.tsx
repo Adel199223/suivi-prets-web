@@ -1,8 +1,9 @@
 import { formatDate, formatMoney } from '../domain/format'
-import type { ImportSessionRecord, WorkbookImportPreviewV1 } from '../domain/types'
+import type { BackupHealth, ImportSessionRecord, WorkbookImportPreviewV1 } from '../domain/types'
 import type { StorageStatus } from '../lib/storagePersistence'
 
 interface ImportPageProps {
+  backupHealth: BackupHealth
   importArtifact: WorkbookImportPreviewV1 | null
   importSessions: ImportSessionRecord[]
   lastBackupAt: string | null
@@ -15,6 +16,7 @@ interface ImportPageProps {
 }
 
 export function ImportPage({
+  backupHealth,
   importArtifact,
   importSessions,
   lastBackupAt,
@@ -48,6 +50,11 @@ export function ImportPage({
               {storageStatus?.persisted === null ? 'Inconnu' : storageStatus?.persisted ? 'Actif' : 'A confirmer'}
             </strong>
           </div>
+        </div>
+        <div className={`notice-panel notice-panel-${backupHealth.state}`}>
+          <strong>{backupHealth.headline}</strong>
+          <p className="section-note">{backupHealth.detail}</p>
+          <p className="section-note">Cadence conseillee: apres chaque import et a la fin de chaque session de saisie.</p>
         </div>
       </section>
 
@@ -152,6 +159,7 @@ export function ImportPage({
               ? `Usage estime: ${storageStatus.usageMb ?? '?'} MB / ${storageStatus.quotaMb ?? '?'} MB.`
               : 'Statut du stockage en cours de lecture...'}
           </p>
+          <p className="section-note">Le stockage persistant aide a limiter les risques locaux, mais il ne remplace jamais une sauvegarde JSON exportee.</p>
         </section>
       </div>
 

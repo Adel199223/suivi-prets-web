@@ -15,6 +15,7 @@ describe('App', () => {
       createObjectURL: vi.fn(() => 'blob:test'),
       revokeObjectURL: vi.fn()
     })
+    vi.stubGlobal('confirm', vi.fn(() => true))
   })
 
   it('supports the main borrower and debt workflow plus backup export and restore', async () => {
@@ -60,6 +61,7 @@ describe('App', () => {
     await resetAllData()
     const backupFile = new File([serializeBackup(backup)], 'restore.json', { type: 'application/json' })
     await user.upload(screen.getByLabelText(/restaurer une sauvegarde json/i), backupFile)
+    expect(window.confirm).toHaveBeenCalled()
     await screen.findByText(/sauvegarde restauree/i)
     await screen.findByText(/amina/i)
   })

@@ -4,6 +4,22 @@ export function serializeBackup(backup: AppBackupV1): string {
   return JSON.stringify(backup, null, 2)
 }
 
+export function summarizeBackup(backup: AppBackupV1): {
+  exportedAt: string
+  borrowerCount: number
+  debtCount: number
+  entryCount: number
+  importCount: number
+} {
+  return {
+    exportedAt: backup.exportedAt,
+    borrowerCount: backup.borrowers.length,
+    debtCount: backup.debts.length,
+    entryCount: backup.entries.length,
+    importCount: backup.imports.length
+  }
+}
+
 export async function parseBackupFile(file: File): Promise<AppBackupV1> {
   const text = await file.text()
   const parsed = JSON.parse(text) as AppBackupV1

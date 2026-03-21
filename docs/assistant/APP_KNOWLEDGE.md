@@ -24,4 +24,4 @@ This bridge is shorter than `APP_KNOWLEDGE.md` and defers to it when details con
 - `npm run build` for bundle safety
 - `npm run validate:ui` for repo-owned browser validation
 - `npm run validate:agent-docs` and `npm run validate:workspace-hygiene` for repo contracts
-- Current follow-up priority after a green validation pass: harden backups and restore guidance.
+- Current follow-up priority after a green validation pass: responsive polish.

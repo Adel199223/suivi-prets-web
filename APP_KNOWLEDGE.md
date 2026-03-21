@@ -16,7 +16,7 @@ The product is designed around fast daily money tracking:
 - Standalone React/Vite app is implemented.
 - Local Dexie persistence is implemented.
 - Dashboard, borrower view, debt view, and import/backup center are implemented.
-- JSON export and replace-from-backup flows are implemented.
+- JSON export, restore confirmation, and backup freshness guidance are implemented.
 - WSL-local `.ods` preview generation and app-side preview JSON merge are implemented.
 - Docs harness, validators, and browser validation harness are implemented.
 - The first private four-debt import has been executed locally via an ignored preview artifact and exported backup.
@@ -103,4 +103,4 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:ui"
 - Data safety depends on backups and the browser storage policy.
 - Real workbook files, generated preview artifacts, and private imported backups must stay out of git.
 - Raw workbook parsing no longer ships in the main client bundle.
-- The next recommended product step is backup hardening and clearer operator guidance around restore safety and backup cadence.
+- The next recommended product step is responsive polish and UI comfort improvements.

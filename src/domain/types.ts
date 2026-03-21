@@ -120,6 +120,12 @@ export interface WorkbookImportPreviewV1 {
   preview: ImportPreview
 }
 
+export interface BackupHealth {
+  state: 'empty' | 'missing' | 'stale' | 'current'
+  headline: string
+  detail: string
+}
+
 export interface MonthlySummary {
   periodKey: string
   lentCents: number

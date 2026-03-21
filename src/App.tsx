@@ -7,7 +7,8 @@ import { DebtPage } from './app/debt-page'
 import { ImportPage } from './app/import-page'
 import { createEmptySnapshot } from './domain/ledger'
 import type { AppSnapshot, EntryKind, WorkbookImportPreviewV1 } from './domain/types'
-import { downloadJson, parseBackupFile, serializeBackup } from './lib/backup'
+import { downloadJson, parseBackupFile, serializeBackup, summarizeBackup } from './lib/backup'
+import { deriveBackupHealth } from './lib/backupHealth'
 import { parseImportPreviewFile } from './lib/importPreview'
 import { addLedgerEntry, applyImportPreview, buildSnapshot, createBorrower, createDebt, exportBackup, replaceFromBackup, setDebtClosed, updateBorrowerNotes, updateDebtNotes } from './lib/repository'
 import { getStorageStatus, requestPersistentStorage, type StorageStatus } from './lib/storagePersistence'
@@ -68,6 +69,7 @@ export default function App() {
   const [flash, setFlash] = useState<string | null>(null)
   const [importArtifact, setImportArtifact] = useState<WorkbookImportPreviewV1 | null>(null)
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null)
+  const backupHealth = deriveBackupHealth(snapshot)
 
   useEffect(() => {
     void getStorageStatus().then(setStorageStatus)
@@ -105,9 +107,13 @@ export default function App() {
   }
 
   async function handleImportPreviewSelect(file: File) {
-    const artifact = await parseImportPreviewFile(file)
-    setImportArtifact(artifact)
-    announce('Apercu d’import charge.')
+    try {
+      const artifact = await parseImportPreviewFile(file)
+      setImportArtifact(artifact)
+      announce('Apercu d’import charge.')
+    } catch (error) {
+      announce(error instanceof Error ? error.message : "Impossible de charger l’apercu d’import.")
+    }
   }
 
   async function handleApplyImport() {
@@ -127,11 +133,25 @@ export default function App() {
   }
 
   async function handleRestoreBackup(file: File) {
-    const backup = await parseBackupFile(file)
-    await replaceFromBackup(backup)
-    setImportArtifact(null)
-    announce('Sauvegarde restauree.')
-    navigate('/')
+    try {
+      const backup = await parseBackupFile(file)
+      const summary = summarizeBackup(backup)
+      const confirmed = window.confirm(
+        `Restaurer la sauvegarde du ${summary.exportedAt.slice(0, 10)} ?\n\n${summary.borrowerCount} emprunteur(s)\n${summary.debtCount} dette(s)\n${summary.entryCount} ecriture(s)\n${summary.importCount} session(s) d’import\n\nCette action remplace toutes les donnees locales actuelles.`
+      )
+
+      if (!confirmed) {
+        announce('Restauration annulee.')
+        return
+      }
+
+      await replaceFromBackup(backup)
+      setImportArtifact(null)
+      announce('Sauvegarde restauree.')
+      navigate('/')
+    } catch (error) {
+      announce(error instanceof Error ? error.message : 'Impossible de restaurer cette sauvegarde.')
+    }
   }
 
   async function handleRequestPersistence() {
@@ -144,7 +164,7 @@ export default function App() {
   return (
     <Shell flash={flash}>
       <Routes>
-        <Route path="/" element={<DashboardPage snapshot={snapshot} onCreateBorrower={handleCreateBorrower} />} />
+        <Route path="/" element={<DashboardPage snapshot={snapshot} backupHealth={backupHealth} onCreateBorrower={handleCreateBorrower} />} />
         <Route
           path="/emprunteurs/:borrowerId"
           element={
@@ -172,6 +192,7 @@ export default function App() {
           path="/import"
           element={
             <ImportPage
+              backupHealth={backupHealth}
               importArtifact={importArtifact}
               importSessions={snapshot.importSessions}
               lastBackupAt={snapshot.lastBackupAt}
