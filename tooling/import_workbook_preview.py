@@ -32,6 +32,8 @@ DATE_VALUE = f"{{{NS['office']}}}date-value"
 TEXT_SPACE_COUNT = f"{{{NS['text']}}}c"
 
 RELEVANT_PREFIX = re.compile(r"^dette[_\s-]?", re.IGNORECASE)
+PERIOD_KEY_PATTERN = re.compile(r"^\d{4}-\d{2}$")
+ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def normalize_whitespace(value: str) -> str:
@@ -107,6 +109,25 @@ def period_key_from_loose_text(value: str) -> str | None:
     month = month_match.group(1).zfill(2)
     year = four_digit.group(1) if four_digit else f"20{short_year.group(1)}" if short_year else None
     return f"{year}-{month}" if year else None
+
+
+def is_valid_period_key(value: str) -> bool:
+    if not PERIOD_KEY_PATTERN.match(value):
+        return False
+
+    month = int(value[5:7])
+    return 1 <= month <= 12
+
+
+def is_valid_iso_date(value: str) -> bool:
+    if not ISO_DATE_PATTERN.match(value):
+        return False
+
+    try:
+        datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        return False
+    return True
 
 
 def fingerprint_bytes(raw_bytes: bytes) -> str:
@@ -262,13 +283,87 @@ def infer_negative_kind(index: int) -> str:
     return "opening_balance" if index == 0 else "advance"
 
 
+def load_resolutions(path: Path | None, workbook_fingerprint: str) -> dict[tuple[str, int], dict[str, Any]]:
+    if path is None:
+        return {}
+
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("Resolution file must contain a JSON object.")
+    if raw.get("version") != "workbook-import-resolutions-v1":
+        raise ValueError("Unsupported resolution file version.")
+    if raw.get("targetFingerprint") != workbook_fingerprint:
+        raise ValueError("Resolution file fingerprint does not match the workbook being parsed.")
+
+    resolutions = raw.get("resolutions")
+    if not isinstance(resolutions, list):
+        raise ValueError("Resolution file must contain a resolutions array.")
+
+    mapping: dict[tuple[str, int], dict[str, Any]] = {}
+    for index, resolution in enumerate(resolutions, start=1):
+        if not isinstance(resolution, dict):
+            raise ValueError(f"Resolution #{index} must be an object.")
+
+        sheet_name = resolution.get("sheetName")
+        row_number = resolution.get("rowNumber")
+        period_key = resolution.get("periodKey")
+        occurred_on = resolution.get("occurredOn")
+
+        if not isinstance(sheet_name, str) or not normalize_whitespace(sheet_name):
+            raise ValueError(f"Resolution #{index} must include a non-empty sheetName.")
+        if not isinstance(row_number, int) or row_number < 1:
+            raise ValueError(f"Resolution #{index} must include a positive integer rowNumber.")
+        if not isinstance(period_key, str) or not is_valid_period_key(period_key):
+            raise ValueError(f"Resolution #{index} must include a valid periodKey in YYYY-MM format.")
+        if occurred_on is not None:
+            if not isinstance(occurred_on, str) or not is_valid_iso_date(occurred_on):
+                raise ValueError(f"Resolution #{index} has an invalid occurredOn date.")
+            if not occurred_on.startswith(period_key + "-"):
+                raise ValueError(f"Resolution #{index} must keep occurredOn inside the declared periodKey.")
+
+        key = (sheet_name, row_number)
+        if key in mapping:
+            raise ValueError(f"Duplicate resolution for {sheet_name}:{row_number}.")
+
+        mapping[key] = {
+            "sheetName": sheet_name,
+            "rowNumber": row_number,
+            "periodKey": period_key,
+            "occurredOn": occurred_on,
+        }
+
+    return mapping
+
+
+def append_manual_resolution_note(detail_text: str, period_key: str) -> str:
+    base = normalize_whitespace(detail_text) or "Import detail"
+    return f"{base} [periode resolue manuellement: {period_key}]"
+
+
 def is_annual_row(row: list[str]) -> bool:
     period = normalize_whitespace(row[1]) if len(row) > 1 else ""
     detail = normalize_whitespace(row[7]).lower() if len(row) > 7 else ""
     return bool(re.match(r"^\d{4}$", period) or "total annuel" in detail)
 
 
-def parse_sheet(sheet_name: str, rows: list[list[str]]) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+def is_summary_label_without_operation(left_period: str, detail_amount_cents: int | None, detail_text: str) -> bool:
+    normalized = normalize_whitespace(left_period).lower()
+    normalized_detail = normalize_whitespace(detail_text).lower()
+    has_operation = detail_amount_cents not in (None, 0) or (
+        bool(normalized_detail)
+        and normalized_detail not in {"détail de l'écriture", "detail de l'ecriture", "montant de l'opération", "montant de l'operation"}
+    )
+    if has_operation:
+        return False
+    return normalized.startswith("total ") or normalized.startswith("reste à payer") or normalized.startswith("reste a payer")
+
+
+def parse_sheet(
+    sheet_name: str,
+    rows: list[list[str]],
+    resolutions: dict[tuple[str, int], dict[str, Any]],
+    applied_resolution_keys: set[tuple[str, int]],
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     if not RELEVANT_PREFIX.search(sheet_name):
         return (
             None,
@@ -287,6 +382,7 @@ def parse_sheet(sheet_name: str, rows: list[list[str]]) -> tuple[dict[str, Any] 
     issues: list[dict[str, Any]] = []
     detail_entries: list[dict[str, Any]] = []
     summary_fallback_entries: list[dict[str, Any]] = []
+    last_resolved_period_key: str | None = None
 
     for index, row in enumerate(rows):
         if is_annual_row(row):
@@ -301,13 +397,33 @@ def parse_sheet(sheet_name: str, rows: list[list[str]]) -> tuple[dict[str, Any] 
         occurred_on = parse_import_date(detail_date)
         period_key = period_key_from_date(occurred_on) or period_key_from_loose_text(left_period) or period_key_from_loose_text(detail_date)
         summary_period_key = period_key_from_loose_text(left_period)
+        row_number = index + 1
+        resolution = resolutions.get((sheet_name, row_number))
+
+        if (
+            detail_amount_cents not in (None, 0)
+            and not period_key
+            and not normalize_whitespace(left_period)
+            and not normalize_whitespace(detail_date)
+            and last_resolved_period_key
+        ):
+            period_key = last_resolved_period_key
+
+        if detail_amount_cents not in (None, 0) and not period_key and resolution is not None:
+            period_key = resolution["periodKey"]
+            occurred_on = resolution["occurredOn"]
+            detail_text = append_manual_resolution_note(detail_text, period_key)
+            applied_resolution_keys.add((sheet_name, row_number))
+
+        if is_summary_label_without_operation(left_period, detail_amount_cents, detail_text):
+            continue
 
         if detail_amount_cents not in (None, 0):
             if not period_key:
                 issues.append(
                     {
                         "sheetName": sheet_name,
-                        "rowNumber": index + 1,
+                        "rowNumber": row_number,
                         "code": "missing_period",
                         "message": "Impossible de deduire la periode de cette ligne detaillee.",
                     }
@@ -323,18 +439,19 @@ def parse_sheet(sheet_name: str, rows: list[list[str]]) -> tuple[dict[str, Any] 
                         "periodKey": period_key,
                         "occurredOn": occurred_on,
                         "description": normalize_whitespace(detail_text) or "Import detail",
-                        "sourceRef": f"{sheet_name}:{index + 1}",
+                        "sourceRef": f"{sheet_name}:{row_number}",
                         "sheetName": sheet_name,
-                        "rowNumber": index + 1,
+                        "rowNumber": row_number,
                     }
                 )
+                last_resolved_period_key = period_key
 
         if detail_amount_cents in (None, 0) and not summary_period_key:
             if (payment_cents is not None and payment_cents > 0) or (lent_cents is not None and lent_cents < 0):
                 issues.append(
                     {
                         "sheetName": sheet_name,
-                        "rowNumber": index + 1,
+                        "rowNumber": row_number,
                         "code": "missing_period",
                         "message": "Une valeur de resume existe sans periode exploitable.",
                     }
@@ -352,9 +469,9 @@ def parse_sheet(sheet_name: str, rows: list[list[str]]) -> tuple[dict[str, Any] 
                     "periodKey": summary_period_key,
                     "occurredOn": occurred_on,
                     "description": normalize_whitespace(detail_text) or "Paiement importe",
-                    "sourceRef": f"{sheet_name}:{index + 1}:summary-payment",
+                    "sourceRef": f"{sheet_name}:{row_number}:summary-payment",
                     "sheetName": sheet_name,
-                    "rowNumber": index + 1,
+                    "rowNumber": row_number,
                     "_fallbackKind": "payment",
                 }
             )
@@ -370,12 +487,13 @@ def parse_sheet(sheet_name: str, rows: list[list[str]]) -> tuple[dict[str, Any] 
                     "periodKey": summary_period_key,
                     "occurredOn": occurred_on,
                     "description": normalize_whitespace(detail_text) or "Avance importee",
-                    "sourceRef": f"{sheet_name}:{index + 1}:summary-lent",
+                    "sourceRef": f"{sheet_name}:{row_number}:summary-lent",
                     "sheetName": sheet_name,
-                    "rowNumber": index + 1,
+                    "rowNumber": row_number,
                     "_fallbackKind": "negative",
                 }
             )
+            last_resolved_period_key = summary_period_key
 
     negative_counter = 0
     detail_typed: list[dict[str, Any]] = []
@@ -424,16 +542,24 @@ def parse_sheet(sheet_name: str, rows: list[list[str]]) -> tuple[dict[str, Any] 
     return (debt, issues)
 
 
-def build_preview(input_path: Path) -> dict[str, Any]:
+def build_preview(input_path: Path, resolutions_path: Path | None = None) -> dict[str, Any]:
     raw_bytes, workbook = load_workbook_rows(input_path)
+    workbook_fingerprint = fingerprint_bytes(raw_bytes)
+    resolutions = load_resolutions(resolutions_path, workbook_fingerprint)
     debts: list[dict[str, Any]] = []
     issues: list[dict[str, Any]] = []
+    applied_resolution_keys: set[tuple[str, int]] = set()
 
     for sheet_name, rows in workbook.items():
-        debt, sheet_issues = parse_sheet(sheet_name, rows)
+        debt, sheet_issues = parse_sheet(sheet_name, rows, resolutions, applied_resolution_keys)
         if debt is not None:
             debts.append(debt)
         issues.extend(sheet_issues)
+
+    unused_resolution_keys = sorted(set(resolutions.keys()) - applied_resolution_keys)
+    if unused_resolution_keys:
+        unresolved = ", ".join(f"{sheet_name}:{row_number}" for sheet_name, row_number in unused_resolution_keys)
+        raise ValueError(f"Resolution entries were not applied: {unresolved}")
 
     entries = [entry for debt in debts for entry in debt["entries"]]
     borrower_count = len({debt["borrowerSourceKey"] for debt in debts})
@@ -450,7 +576,7 @@ def build_preview(input_path: Path) -> dict[str, Any]:
 
     return {
         "fileName": input_path.name,
-        "fingerprint": fingerprint_bytes(raw_bytes),
+        "fingerprint": workbook_fingerprint,
         "debts": debts,
         "entries": entries,
         "issues": issues,
@@ -462,6 +588,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate a versioned import preview JSON artifact from an ODS workbook.")
     parser.add_argument("--input", required=True, help="Path to the source .ods workbook")
     parser.add_argument("--output", required=True, help="Path to the output preview .json artifact")
+    parser.add_argument("--resolutions", help="Optional path to a workbook-import-resolutions-v1 JSON file")
     return parser.parse_args(argv)
 
 
@@ -469,6 +596,7 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     input_path = Path(args.input).expanduser().resolve()
     output_path = Path(args.output).expanduser().resolve()
+    resolutions_path = Path(args.resolutions).expanduser().resolve() if args.resolutions else None
 
     if input_path.suffix.lower() != ".ods":
         print("Only .ods workbooks are supported by this preview generator.", file=sys.stderr)
@@ -477,7 +605,7 @@ def main(argv: list[str]) -> int:
     artifact = {
         "version": "workbook-import-preview-v1",
         "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "preview": build_preview(input_path),
+        "preview": build_preview(input_path, resolutions_path),
     }
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

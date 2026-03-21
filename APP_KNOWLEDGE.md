@@ -16,10 +16,12 @@ The product is designed around fast daily money tracking:
 - Standalone React/Vite app is implemented.
 - Local Dexie persistence is implemented.
 - Dashboard, borrower view, debt view, and import/backup center are implemented.
+- Mobile and tablet responsive polish has been applied across the app shell, debt surfaces, and trust center layouts.
 - JSON export, restore confirmation, and backup freshness guidance are implemented.
 - WSL-local `.ods` preview generation and app-side preview JSON merge are implemented.
+- Fingerprint-guarded local resolution files can patch truly ambiguous workbook rows before preview generation.
 - Docs harness, validators, and browser validation harness are implemented.
-- The first private four-debt import has been executed locally via an ignored preview artifact and exported backup.
+- The first private four-debt import has been executed locally, replayed with a zero-issue resolved preview, and exported as a fresh private backup.
 - `npm test`, `npm run lint`, `npm run build`, `npm run validate:agent-docs`, `npm run validate:workspace-hygiene`, and `npm run validate:ui` are passing.
 
 ## Tech Stack
@@ -63,10 +65,12 @@ All monetary values are stored in integer euro cents.
 
 - Imports stay local and never upload files anywhere.
 - `tooling/import_workbook_preview.py` converts a workbook-family `.ods` file into a versioned `workbook-import-preview-v1` JSON artifact.
+- When a row is truly ambiguous, the preview generator can also consume a local `workbook-import-resolutions-v1` file keyed by workbook fingerprint and sheet/row location.
 - The app imports that preview artifact instead of parsing raw workbooks in the browser.
 - The importer targets the existing workbook family, not arbitrary spreadsheets.
 - It reads real operation rows from the detail columns and uses summary-side values only when the detail side is missing.
 - Annual total rows, placeholder rows, and blank rows are ignored.
+- Continuation rows can inherit the previous resolved period only when the workbook structure makes that relationship explicit.
 - Repeated imports dedupe by normalized entry signature instead of workbook hash alone.
 - Merge results are recorded in `ImportSession`.
 
@@ -88,6 +92,7 @@ Use WSL-safe wrappers from this environment:
 
 ```powershell
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run import:preview -- --input /chemin/classeur.ods --output output/private/apercu.json"
+wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run import:preview -- --input /chemin/classeur.ods --output output/private/apercu-resolu.json --resolutions output/private/resolutions.json"
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm test"
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run lint"
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run build"
@@ -103,4 +108,5 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:ui"
 - Data safety depends on backups and the browser storage policy.
 - Real workbook files, generated preview artifacts, and private imported backups must stay out of git.
 - Raw workbook parsing no longer ships in the main client bundle.
-- The next recommended product step is responsive polish and UI comfort improvements.
+- Local resolution files are an operator escape hatch for ambiguous rows, not a replacement for conservative parser rules.
+- The next recommended product step is to run a larger private workbook migration with the current preview-plus-resolution workflow when the next workbook is available.

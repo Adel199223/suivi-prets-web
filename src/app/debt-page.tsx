@@ -83,18 +83,18 @@ export function DebtPage({ debtView, onAddEntry, onToggleDebtClosed, onUpdateDeb
             </div>
           </div>
           <div className="table-stack">
-            <div className="table-row table-head">
+            <div className="table-row table-row-data table-head">
               <span>Type</span>
               <span>Date</span>
               <span>Periode</span>
               <span>Montant</span>
             </div>
             {debtView.entries.map((entry) => (
-              <div className="table-row" key={entry.id}>
-                <span>{describeEntryKind(entry.kind)}</span>
-                <span>{formatDate(entry.occurredOn)}</span>
-                <span>{entry.periodKey}</span>
-                <span>{formatMoney(entry.amountCents)}</span>
+              <div className="table-row table-row-data" key={entry.id}>
+                <span className="table-cell" data-label="Type">{describeEntryKind(entry.kind)}</span>
+                <span className="table-cell" data-label="Date">{formatDate(entry.occurredOn)}</span>
+                <span className="table-cell" data-label="Periode">{entry.periodKey}</span>
+                <span className="table-cell" data-label="Montant">{formatMoney(entry.amountCents)}</span>
               </div>
             ))}
           </div>
@@ -108,18 +108,18 @@ export function DebtPage({ debtView, onAddEntry, onToggleDebtClosed, onUpdateDeb
             </div>
           </div>
           <div className="table-stack">
-            <div className="table-row table-head">
+            <div className="table-row table-row-data table-head">
               <span>Annee</span>
               <span>Prete</span>
               <span>Paye</span>
               <span>Net</span>
             </div>
             {debtView.annualSummaries.map((summary) => (
-              <div className="table-row" key={summary.year}>
-                <span>{summary.year}</span>
-                <span>{formatMoney(summary.lentCents)}</span>
-                <span>{formatMoney(summary.paidCents)}</span>
-                <span>{formatMoney(summary.netChangeCents)}</span>
+              <div className="table-row table-row-data" key={summary.year}>
+                <span className="table-cell" data-label="Annee">{summary.year}</span>
+                <span className="table-cell" data-label="Prete">{formatMoney(summary.lentCents)}</span>
+                <span className="table-cell" data-label="Paye">{formatMoney(summary.paidCents)}</span>
+                <span className="table-cell" data-label="Net">{formatMoney(summary.netChangeCents)}</span>
               </div>
             ))}
           </div>

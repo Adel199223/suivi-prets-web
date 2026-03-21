@@ -51,4 +51,105 @@ describe('import preview tooling', () => {
     expect(actual.preview.issues.length).toBeGreaterThan(0)
     expect(actual.preview.summary.entryCount).toBe(0)
   })
+
+  it('inherits the previous period for continuation rows and ignores summary label rows', () => {
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'suivi-prets-import-preview-'))
+    tempDirs.push(outputDir)
+    const outputPath = path.join(outputDir, 'continuation-preview.json')
+
+    const result = spawnSync('python3', ['tooling/import_workbook_preview.py', '--input', importFixturePath('continuation-workbook.ods'), '--output', outputPath], {
+      cwd: repoRoot,
+      encoding: 'utf8'
+    })
+
+    expect(result.status, result.stderr).toBe(0)
+
+    const actual = JSON.parse(fs.readFileSync(outputPath, 'utf8'))
+    const expected = readImportPreviewArtifact('continuation-preview.json')
+    expect(actual.preview).toEqual(expected.preview)
+    expect(actual.preview.issues).toHaveLength(1)
+    expect(actual.preview.issues[0].rowNumber).toBe(2)
+    expect(actual.preview.debts[0].entries).toHaveLength(3)
+  })
+
+  it('applies explicit local resolutions only to the targeted workbook rows', () => {
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'suivi-prets-import-preview-'))
+    tempDirs.push(outputDir)
+    const outputPath = path.join(outputDir, 'continuation-preview-resolved.json')
+
+    const result = spawnSync(
+      'python3',
+      [
+        'tooling/import_workbook_preview.py',
+        '--input',
+        importFixturePath('continuation-workbook.ods'),
+        '--output',
+        outputPath,
+        '--resolutions',
+        importFixturePath('continuation-resolutions.json')
+      ],
+      {
+        cwd: repoRoot,
+        encoding: 'utf8'
+      }
+    )
+
+    expect(result.status, result.stderr).toBe(0)
+
+    const actual = JSON.parse(fs.readFileSync(outputPath, 'utf8'))
+    const expected = readImportPreviewArtifact('continuation-preview-resolved.json')
+    expect(actual.preview).toEqual(expected.preview)
+    expect(actual.preview.issues).toHaveLength(0)
+    expect(actual.preview.entries).toHaveLength(4)
+    const resolvedEntry = actual.preview.entries.find((entry: { sourceRef: string }) => entry.sourceRef === 'dette_adel_inconnue:2')
+    expect(resolvedEntry?.description).toContain('[periode resolue manuellement: 2021-01]')
+  })
+
+  it('rejects resolution files that target the wrong workbook fingerprint', () => {
+    const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'suivi-prets-import-preview-'))
+    tempDirs.push(outputDir)
+    const outputPath = path.join(outputDir, 'continuation-preview-invalid.json')
+    const resolutionsPath = path.join(outputDir, 'invalid-resolutions.json')
+
+    fs.writeFileSync(
+      resolutionsPath,
+      JSON.stringify(
+        {
+          version: 'workbook-import-resolutions-v1',
+          targetFingerprint: 'not-the-right-fingerprint',
+          resolutions: [
+            {
+              sheetName: 'dette_adel_inconnue',
+              rowNumber: 2,
+              periodKey: '2021-01',
+              occurredOn: null
+            }
+          ]
+        },
+        null,
+        2
+      ),
+      'utf8'
+    )
+
+    const result = spawnSync(
+      'python3',
+      [
+        'tooling/import_workbook_preview.py',
+        '--input',
+        importFixturePath('continuation-workbook.ods'),
+        '--output',
+        outputPath,
+        '--resolutions',
+        resolutionsPath
+      ],
+      {
+        cwd: repoRoot,
+        encoding: 'utf8'
+      }
+    )
+
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('fingerprint')
+  })
 })

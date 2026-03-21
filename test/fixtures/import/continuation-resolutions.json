@@ -1,0 +1,12 @@
+{
+  "version": "workbook-import-resolutions-v1",
+  "targetFingerprint": "787f812aa47f1ad343f85466c1dc49ed4e28a8d7610fc912a98d8b989c1893ea",
+  "resolutions": [
+    {
+      "sheetName": "dette_adel_inconnue",
+      "rowNumber": 2,
+      "periodKey": "2021-01",
+      "occurredOn": null
+    }
+  ]
+}

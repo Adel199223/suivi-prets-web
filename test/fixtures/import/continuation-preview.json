@@ -1,0 +1,137 @@
+{
+  "version": "workbook-import-preview-v1",
+  "generatedAt": "2026-03-21T01:25:31.966340Z",
+  "preview": {
+    "fileName": "continuation-workbook.ods",
+    "fingerprint": "787f812aa47f1ad343f85466c1dc49ed4e28a8d7610fc912a98d8b989c1893ea",
+    "debts": [
+      {
+        "sourceKey": "adel:suite",
+        "borrowerSourceKey": "adel",
+        "borrowerName": "Adel",
+        "label": "Suite",
+        "notes": "Importe depuis dette_adel_suite",
+        "sheetName": "dette_adel_suite",
+        "entries": [
+          {
+            "debtSourceKey": "adel:suite",
+            "borrowerSourceKey": "adel",
+            "borrowerName": "Adel",
+            "debtLabel": "Suite",
+            "amountCents": 200000,
+            "periodKey": "2024-01",
+            "occurredOn": null,
+            "description": "Premier virement",
+            "sourceRef": "dette_adel_suite:4",
+            "sheetName": "dette_adel_suite",
+            "rowNumber": 4,
+            "kind": "opening_balance",
+            "signature": "adel|adel:suite|opening_balance|200000|2024-01||premier virement"
+          },
+          {
+            "debtSourceKey": "adel:suite",
+            "borrowerSourceKey": "adel",
+            "borrowerName": "Adel",
+            "debtLabel": "Suite",
+            "amountCents": 100000,
+            "periodKey": "2024-01",
+            "occurredOn": null,
+            "description": "Deuxieme virement",
+            "sourceRef": "dette_adel_suite:5",
+            "sheetName": "dette_adel_suite",
+            "rowNumber": 5,
+            "kind": "advance",
+            "signature": "adel|adel:suite|advance|100000|2024-01||deuxieme virement"
+          },
+          {
+            "debtSourceKey": "adel:suite",
+            "borrowerSourceKey": "adel",
+            "borrowerName": "Adel",
+            "debtLabel": "Suite",
+            "amountCents": 20000,
+            "periodKey": "2024-01",
+            "occurredOn": null,
+            "description": "Troisieme virement",
+            "sourceRef": "dette_adel_suite:6",
+            "sheetName": "dette_adel_suite",
+            "rowNumber": 6,
+            "kind": "advance",
+            "signature": "adel|adel:suite|advance|20000|2024-01||troisieme virement"
+          }
+        ]
+      },
+      {
+        "sourceKey": "adel:inconnue",
+        "borrowerSourceKey": "adel",
+        "borrowerName": "Adel",
+        "label": "Inconnue",
+        "notes": "Importe depuis dette_adel_inconnue",
+        "sheetName": "dette_adel_inconnue",
+        "entries": []
+      }
+    ],
+    "entries": [
+      {
+        "debtSourceKey": "adel:suite",
+        "borrowerSourceKey": "adel",
+        "borrowerName": "Adel",
+        "debtLabel": "Suite",
+        "amountCents": 200000,
+        "periodKey": "2024-01",
+        "occurredOn": null,
+        "description": "Premier virement",
+        "sourceRef": "dette_adel_suite:4",
+        "sheetName": "dette_adel_suite",
+        "rowNumber": 4,
+        "kind": "opening_balance",
+        "signature": "adel|adel:suite|opening_balance|200000|2024-01||premier virement"
+      },
+      {
+        "debtSourceKey": "adel:suite",
+        "borrowerSourceKey": "adel",
+        "borrowerName": "Adel",
+        "debtLabel": "Suite",
+        "amountCents": 100000,
+        "periodKey": "2024-01",
+        "occurredOn": null,
+        "description": "Deuxieme virement",
+        "sourceRef": "dette_adel_suite:5",
+        "sheetName": "dette_adel_suite",
+        "rowNumber": 5,
+        "kind": "advance",
+        "signature": "adel|adel:suite|advance|100000|2024-01||deuxieme virement"
+      },
+      {
+        "debtSourceKey": "adel:suite",
+        "borrowerSourceKey": "adel",
+        "borrowerName": "Adel",
+        "debtLabel": "Suite",
+        "amountCents": 20000,
+        "periodKey": "2024-01",
+        "occurredOn": null,
+        "description": "Troisieme virement",
+        "sourceRef": "dette_adel_suite:6",
+        "sheetName": "dette_adel_suite",
+        "rowNumber": 6,
+        "kind": "advance",
+        "signature": "adel|adel:suite|advance|20000|2024-01||troisieme virement"
+      }
+    ],
+    "issues": [
+      {
+        "sheetName": "dette_adel_inconnue",
+        "rowNumber": 2,
+        "code": "missing_period",
+        "message": "Impossible de deduire la periode de cette ligne detaillee."
+      }
+    ],
+    "summary": {
+      "debtCount": 2,
+      "borrowerCount": 1,
+      "entryCount": 3,
+      "paymentCount": 0,
+      "advanceCount": 3,
+      "outstandingImportedCents": 320000
+    }
+  }
+}

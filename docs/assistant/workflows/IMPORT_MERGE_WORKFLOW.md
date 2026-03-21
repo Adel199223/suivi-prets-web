@@ -9,6 +9,7 @@ Use this workflow for workbook-family parsing, preview, dedupe, anomaly review, 
 - Safe parser changes
 - Explicit duplicate handling
 - Clear anomaly reporting
+- Explicit local resolution guidance for rows that still cannot be inferred safely
 
 ## When To Use
 
@@ -33,6 +34,7 @@ Don't use this workflow when the task is ordinary debt or payment CRUD. Instead 
 
 ```powershell
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run import:preview -- --input /chemin/classeur.ods --output output/private/apercu.json"
+wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run import:preview -- --input /chemin/classeur.ods --output output/private/apercu-resolu.json --resolutions output/private/resolutions.json"
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm test"
 ```
 
@@ -45,6 +47,7 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm test"
 ## Failure Modes and Fallback Steps
 
 - If the parser cannot trust a row, raise an issue instead of importing it.
+- If a row is still ambiguous after conservative parsing, use a local `workbook-import-resolutions-v1` file keyed by workbook fingerprint and sheet/row coordinates instead of broadening parser inference.
 - If duplicate imports appear, inspect normalized signatures before changing workbook-level matching.
 - If the local preview tool and app disagree, treat the preview artifact contract as the boundary and fix the generator or parser before importing more private data.
 - If the preview is confusing, keep the import conservative and show issues rather than guessing.
@@ -54,3 +57,4 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm test"
 - Confirm workbook-family assumptions
 - Confirm duplicate signature behavior
 - Confirm anomalies are visible to the operator
+- Confirm any local resolution file matches the target workbook fingerprint and only covers intentional rows
