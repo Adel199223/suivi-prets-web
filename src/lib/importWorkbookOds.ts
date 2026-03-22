@@ -4,9 +4,12 @@ import type {
   ImportCandidateDebt,
   ImportCandidateEntry,
   ImportIssue,
+  ImportIssueResolution,
   ImportPreview,
+  ImportUnresolvedCandidate,
   WorkbookImportPreviewV1,
 } from '../domain/types'
+import { createImportEntrySignature, createUnresolvedImportSignature } from './importSignature'
 
 const NS = {
   office: 'urn:oasis:names:tc:opendocument:xmlns:office:1.0',
@@ -17,7 +20,35 @@ const NS = {
 const RELEVANT_PREFIX = /^dette[_\s-]?/i
 
 type SheetRows = Record<string, string[][]>
-type PendingEntry = Omit<ImportCandidateEntry, 'kind' | 'signature'>
+type ImportResolutionMap = Map<string, ImportIssueResolution>
+
+function buildResolutionKey(sheetName: string, rowNumber: number): string {
+  return `${sheetName}:${rowNumber}`
+}
+
+function createResolutionMap(resolutions: ImportIssueResolution[] = []): ImportResolutionMap {
+  return new Map(
+    resolutions.map((resolution) => [buildResolutionKey(resolution.sheetName, resolution.rowNumber), resolution]),
+  )
+}
+
+function getResolution(
+  resolutionMap: ImportResolutionMap,
+  sheetName: string,
+  rowNumber: number,
+): ImportIssueResolution | null {
+  return resolutionMap.get(buildResolutionKey(sheetName, rowNumber)) ?? null
+}
+
+function withResolutionNote(description: string, resolution: ImportIssueResolution | null): string {
+  const normalized = normalizeWhitespace(description)
+  if (!resolution) {
+    return normalized
+  }
+
+  const prefix = normalized || 'Import detail'
+  return `${prefix} [periode resolue dans l'app: ${resolution.periodKey}]`
+}
 
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
@@ -107,18 +138,6 @@ function periodKeyFromLooseText(value: string): string | null {
   return year ? `${year}-${month}` : null
 }
 
-function createSignature(candidate: Pick<ImportCandidateEntry, 'borrowerSourceKey' | 'debtSourceKey' | 'kind' | 'amountCents' | 'periodKey' | 'occurredOn' | 'description'>): string {
-  return [
-    candidate.borrowerSourceKey,
-    candidate.debtSourceKey,
-    candidate.kind,
-    candidate.amountCents,
-    candidate.periodKey,
-    candidate.occurredOn ?? '',
-    normalizeWhitespace(candidate.description).toLowerCase(),
-  ].join('|')
-}
-
 function dedupeBySignature(entries: ImportCandidateEntry[]): ImportCandidateEntry[] {
   const seen = new Set<string>()
   const output: ImportCandidateEntry[] = []
@@ -133,6 +152,34 @@ function dedupeBySignature(entries: ImportCandidateEntry[]): ImportCandidateEntr
   }
 
   return output
+}
+
+function dedupeUnresolvedBySignature(entries: ImportUnresolvedCandidate[]): ImportUnresolvedCandidate[] {
+  const seen = new Set<string>()
+  const output: ImportUnresolvedCandidate[] = []
+
+  for (const entry of entries) {
+    if (seen.has(entry.signature)) {
+      continue
+    }
+
+    seen.add(entry.signature)
+    output.push(entry)
+  }
+
+  return output
+}
+
+function hasDuplicateImportedEntry(
+  entries: ImportCandidateEntry[],
+  candidate: Pick<ImportCandidateEntry, 'kind' | 'amountCents' | 'periodKey'>
+): boolean {
+  return entries.some(
+    (entry) =>
+      entry.kind === candidate.kind &&
+      entry.amountCents === candidate.amountCents &&
+      entry.periodKey === candidate.periodKey
+  )
 }
 
 function inferNegativeKind(index: number): EntryKind {
@@ -334,7 +381,56 @@ function isSummaryLabelWithoutOperation(leftPeriod: string, detailAmountCents: n
   return normalized.startsWith('total ') || normalized.startsWith('reste a payer') || normalized.startsWith('reste à payer')
 }
 
-function parseSheet(sheetName: string, rows: string[][]): { debt: ImportCandidateDebt | null; issues: ImportIssue[] } {
+function hasMeaningfulCellText(value: string): boolean {
+  const normalized = normalizeWhitespace(value)
+  return normalized !== '' && normalized !== '/'
+}
+
+function normalizeHeaderCell(value: string): string {
+  return normalizeWhitespace(value)
+    .normalize('NFD')
+    .replace(/\p{M}+/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function isColumnHeaderRow(input: {
+  leftPeriod: string
+  rawPayment: string
+  rawLent: string
+  detailDate: string
+  detailText: string
+  rawDetailAmount: string
+}): boolean {
+  const leftLabel = normalizeHeaderCell(input.leftPeriod)
+  const paymentLabel = normalizeHeaderCell(input.rawPayment)
+  const lentLabel = normalizeHeaderCell(input.rawLent)
+  const detailDateLabel = normalizeHeaderCell(input.detailDate)
+  const detailTextLabel = normalizeHeaderCell(input.detailText)
+  const detailAmountLabel = normalizeHeaderCell(input.rawDetailAmount)
+
+  const hasDetailHeaders =
+    detailDateLabel === 'date de l operation' &&
+    detailTextLabel === 'detail de l ecriture' &&
+    detailAmountLabel === 'montant de l operation'
+
+  if (leftLabel === 'date' && paymentLabel === 'paye' && lentLabel === 'prete') {
+    return true
+  }
+
+  if (!hasDetailHeaders) {
+    return false
+  }
+
+  return leftLabel === 'date' || leftLabel.startsWith('total ') || leftLabel.startsWith('reste')
+}
+
+function parseSheet(
+  sheetName: string,
+  rows: string[][],
+  resolutionMap: ImportResolutionMap,
+): { debt: ImportCandidateDebt | null; issues: ImportIssue[]; unresolvedEntries: ImportUnresolvedCandidate[] } {
   if (!RELEVANT_PREFIX.test(sheetName)) {
     return {
       debt: null,
@@ -346,15 +442,17 @@ function parseSheet(sheetName: string, rows: string[][]): { debt: ImportCandidat
           message: 'Feuille ignoree car elle ne suit pas la famille de workbook attendue.',
         },
       ],
+      unresolvedEntries: [],
     }
   }
 
   const [borrowerSourceKey, debtSourceKey, debtLabel] = parseBorrowerAndDebt(sheetName)
   const borrowerName = guessBorrowerName(sheetName, rows)
   const issues: ImportIssue[] = []
-  const detailEntries: PendingEntry[] = []
-  const summaryFallbackEntries: Array<PendingEntry & { fallbackKind: 'payment' | 'negative' }> = []
+  const entries: ImportCandidateEntry[] = []
+  const unresolvedEntries: ImportUnresolvedCandidate[] = []
   let lastResolvedPeriodKey: string | null = null
+  let negativeCounter = 0
 
   rows.forEach((row, index) => {
     if (isAnnualRow(row)) {
@@ -368,7 +466,11 @@ function parseSheet(sheetName: string, rows: string[][]): { debt: ImportCandidat
     const detailDate = row[6] ?? ''
     const detailText = row[7] ?? ''
     const detailAmountCents = centsFromCell(row[8] ?? '')
-    const occurredOn = parseImportDate(detailDate)
+    const rawPayment = row[2] ?? ''
+    const rawLent = row[3] ?? ''
+    const rawDetailAmount = row[8] ?? ''
+    const resolution = getResolution(resolutionMap, sheetName, rowNumber)
+    const occurredOn = resolution?.occurredOn ?? parseImportDate(detailDate)
     let periodKey =
       periodKeyFromDate(occurredOn) ?? periodKeyFromLooseText(leftPeriod) ?? periodKeyFromLooseText(detailDate)
     const summaryPeriodKey = periodKeyFromLooseText(leftPeriod)
@@ -387,134 +489,270 @@ function parseSheet(sheetName: string, rows: string[][]): { debt: ImportCandidat
       return
     }
 
+    if (
+      isColumnHeaderRow({
+        leftPeriod,
+        rawPayment,
+        rawLent,
+        detailDate,
+        detailText,
+        rawDetailAmount
+      })
+    ) {
+      return
+    }
+
+    if (hasMeaningfulCellText(rawDetailAmount) && detailAmountCents === null && (hasMeaningfulCellText(detailText) || hasMeaningfulCellText(detailDate))) {
+      issues.push({
+        sheetName,
+        rowNumber,
+        code: 'invalid_amount',
+        message: 'Le montant detaille de cette ligne ne peut pas etre lu de maniere fiable.',
+      })
+      return
+    }
+
+    if ([null, 0].includes(detailAmountCents) && hasMeaningfulCellText(rawPayment) && paymentCents === null && summaryPeriodKey) {
+      issues.push({
+        sheetName,
+        rowNumber,
+        code: 'invalid_amount',
+        message: 'Le montant resume de paiement de cette ligne ne peut pas etre lu de maniere fiable.',
+      })
+      return
+    }
+
+    if ([null, 0].includes(detailAmountCents) && hasMeaningfulCellText(rawLent) && lentCents === null && summaryPeriodKey) {
+      issues.push({
+        sheetName,
+        rowNumber,
+        code: 'invalid_amount',
+        message: 'Le montant resume d’avance de cette ligne ne peut pas etre lu de maniere fiable.',
+      })
+      return
+    }
+
     if (![null, 0].includes(detailAmountCents)) {
+      if (!periodKey && resolution) {
+        periodKey = resolution.periodKey
+      }
+
+      const kind = (detailAmountCents ?? 0) > 0 ? 'payment' : inferNegativeKind(negativeCounter)
+      if ((detailAmountCents ?? 0) <= 0) {
+        negativeCounter += 1
+      }
+
+      const baseDescription = withResolutionNote(detailText, resolution)
+      const amountCents = Math.abs(detailAmountCents ?? 0)
+
       if (!periodKey) {
-        issues.push({
+        unresolvedEntries.push({
           sheetName,
           rowNumber,
-          code: 'missing_period',
-          message: 'Impossible de deduire la periode de cette ligne detaillee.',
-        })
-      } else {
-        detailEntries.push({
           debtSourceKey,
           borrowerSourceKey,
           borrowerName,
           debtLabel,
-          amountCents: Math.abs(detailAmountCents ?? 0),
+          kind,
+          amountCents,
+          occurredOn,
+          description: baseDescription,
+          sourceRef: `${sheetName}:${rowNumber}`,
+          reasonCode: 'missing_period',
+          reasonMessage: 'Impossible de deduire la periode de cette ligne detaillee.',
+          signature: createUnresolvedImportSignature({
+            borrowerSourceKey,
+            debtSourceKey,
+            kind,
+            amountCents,
+            occurredOn,
+            description: baseDescription,
+            sourceRef: `${sheetName}:${rowNumber}`,
+          }),
+        })
+      } else {
+        entries.push({
+          debtSourceKey,
+          borrowerSourceKey,
+          borrowerName,
+          debtLabel,
+          kind,
+          amountCents,
           periodKey,
           occurredOn,
-          description: normalizeWhitespace(detailText) || 'Import detail',
+          description: baseDescription,
           sourceRef: `${sheetName}:${rowNumber}`,
           sheetName,
           rowNumber,
+          signature: createImportEntrySignature({
+            borrowerSourceKey,
+            debtSourceKey,
+            kind,
+            amountCents,
+            periodKey,
+            occurredOn,
+            description: baseDescription,
+          }),
         })
         lastResolvedPeriodKey = periodKey
       }
+
+      return
     }
 
-    if ([null, 0].includes(detailAmountCents) && !summaryPeriodKey) {
-      if ((paymentCents !== null && paymentCents > 0) || (lentCents !== null && lentCents < 0)) {
+    let resolvedSummaryPeriodKey = summaryPeriodKey
+    if ([null, 0].includes(detailAmountCents) && !resolvedSummaryPeriodKey && resolution) {
+      resolvedSummaryPeriodKey = resolution.periodKey
+    }
+
+    if ([null, 0].includes(detailAmountCents) && !resolvedSummaryPeriodKey && paymentCents !== null && paymentCents > 0) {
+      const description = withResolutionNote(detailText || 'Paiement importe', resolution)
+      const sourceRef = `${sheetName}:${rowNumber}:summary-payment`
+      unresolvedEntries.push({
+        debtSourceKey,
+        borrowerSourceKey,
+        borrowerName,
+        debtLabel,
+        kind: 'payment',
+        amountCents: paymentCents,
+        occurredOn,
+        description,
+        sourceRef,
+        sheetName,
+        rowNumber,
+        reasonCode: 'missing_period',
+        reasonMessage: 'Une valeur de resume existe sans periode exploitable.',
+        signature: createUnresolvedImportSignature({
+          borrowerSourceKey,
+          debtSourceKey,
+          kind: 'payment',
+          amountCents: paymentCents,
+          occurredOn,
+          description,
+          sourceRef,
+        }),
+      })
+      return
+    }
+
+    if ([null, 0].includes(detailAmountCents) && !resolvedSummaryPeriodKey && lentCents !== null && lentCents < 0) {
+      const kind = inferNegativeKind(negativeCounter)
+      negativeCounter += 1
+      const amountCents = Math.abs(lentCents)
+      const description = withResolutionNote(detailText || 'Avance importee', resolution)
+      const sourceRef = `${sheetName}:${rowNumber}:summary-lent`
+      unresolvedEntries.push({
+        debtSourceKey,
+        borrowerSourceKey,
+        borrowerName,
+        debtLabel,
+        kind,
+        amountCents,
+        occurredOn,
+        description,
+        sourceRef,
+        sheetName,
+        rowNumber,
+        reasonCode: 'missing_period',
+        reasonMessage: 'Une valeur de resume existe sans periode exploitable.',
+        signature: createUnresolvedImportSignature({
+          borrowerSourceKey,
+          debtSourceKey,
+          kind,
+          amountCents,
+          occurredOn,
+          description,
+          sourceRef,
+        }),
+      })
+      return
+    }
+
+    if ([null, 0].includes(detailAmountCents) && !resolvedSummaryPeriodKey) {
+      if (hasMeaningfulCellText(rawPayment) || hasMeaningfulCellText(rawLent)) {
         issues.push({
           sheetName,
           rowNumber,
           code: 'missing_period',
-          message: 'Une valeur de resume existe sans periode exploitable.',
+          message: 'Une valeur de resume existe mais ne peut pas encore etre mise en attente de maniere fiable.',
         })
       }
       return
     }
 
-    if ([null, 0].includes(detailAmountCents) && summaryPeriodKey && paymentCents !== null && paymentCents > 0) {
-      summaryFallbackEntries.push({
+    if ([null, 0].includes(detailAmountCents) && resolvedSummaryPeriodKey && paymentCents !== null && paymentCents > 0) {
+      const description = withResolutionNote(detailText || 'Paiement importe', resolution)
+      const sourceRef = `${sheetName}:${rowNumber}:summary-payment`
+      const typed: ImportCandidateEntry = {
         debtSourceKey,
         borrowerSourceKey,
         borrowerName,
         debtLabel,
+        kind: 'payment',
         amountCents: paymentCents,
-        periodKey: summaryPeriodKey,
+        periodKey: resolvedSummaryPeriodKey,
         occurredOn,
-        description: normalizeWhitespace(detailText) || 'Paiement importe',
-        sourceRef: `${sheetName}:${rowNumber}:summary-payment`,
+        description,
+        sourceRef,
         sheetName,
         rowNumber,
-        fallbackKind: 'payment',
-      })
+        signature: createImportEntrySignature({
+          borrowerSourceKey,
+          debtSourceKey,
+          kind: 'payment',
+          amountCents: paymentCents,
+          periodKey: resolvedSummaryPeriodKey,
+          occurredOn,
+          description,
+        }),
+      }
+
+      if (!hasDuplicateImportedEntry(entries, typed)) {
+        entries.push(typed)
+      }
     }
 
-    if ([null, 0].includes(detailAmountCents) && summaryPeriodKey && lentCents !== null && lentCents < 0) {
-      summaryFallbackEntries.push({
+    if ([null, 0].includes(detailAmountCents) && resolvedSummaryPeriodKey && lentCents !== null && lentCents < 0) {
+      const kind = inferNegativeKind(negativeCounter)
+      negativeCounter += 1
+      const amountCents = Math.abs(lentCents)
+      const description = withResolutionNote(detailText || 'Avance importee', resolution)
+      const sourceRef = `${sheetName}:${rowNumber}:summary-lent`
+      const typed: ImportCandidateEntry = {
         debtSourceKey,
         borrowerSourceKey,
         borrowerName,
         debtLabel,
-        amountCents: Math.abs(lentCents),
-        periodKey: summaryPeriodKey,
+        kind,
+        amountCents,
+        periodKey: resolvedSummaryPeriodKey,
         occurredOn,
-        description: normalizeWhitespace(detailText) || 'Avance importee',
-        sourceRef: `${sheetName}:${rowNumber}:summary-lent`,
+        description,
+        sourceRef,
         sheetName,
         rowNumber,
-        fallbackKind: 'negative',
-      })
-      lastResolvedPeriodKey = summaryPeriodKey
+        signature: createImportEntrySignature({
+          borrowerSourceKey,
+          debtSourceKey,
+          kind,
+          amountCents,
+          periodKey: resolvedSummaryPeriodKey,
+          occurredOn,
+          description,
+        }),
+      }
+
+      const duplicate = hasDuplicateImportedEntry(entries, typed)
+
+      if (!duplicate) {
+        entries.push(typed)
+      }
+
+      lastResolvedPeriodKey = resolvedSummaryPeriodKey
     }
   })
 
-  let negativeCounter = 0
-  const detailTyped: ImportCandidateEntry[] = detailEntries.map((entry) => {
-    const row = rows[entry.rowNumber - 1] ?? []
-    const sourceAmount = centsFromCell(row[8] ?? '') ?? 0
-    const kind = sourceAmount > 0 ? 'payment' : inferNegativeKind(negativeCounter)
-    if (sourceAmount <= 0) {
-      negativeCounter += 1
-    }
-
-    const typed: ImportCandidateEntry = {
-      ...entry,
-      kind,
-      signature: createSignature({ ...entry, kind }),
-    }
-
-    return typed
-  })
-
-  const fallbackTyped: ImportCandidateEntry[] = []
-  for (const entry of summaryFallbackEntries) {
-    const kind = entry.fallbackKind === 'payment' ? 'payment' : inferNegativeKind(negativeCounter)
-    if (entry.fallbackKind === 'negative') {
-      negativeCounter += 1
-    }
-
-    const typed: ImportCandidateEntry = {
-      debtSourceKey: entry.debtSourceKey,
-      borrowerSourceKey: entry.borrowerSourceKey,
-      borrowerName: entry.borrowerName,
-      debtLabel: entry.debtLabel,
-      amountCents: entry.amountCents,
-      periodKey: entry.periodKey,
-      occurredOn: entry.occurredOn,
-      description: entry.description,
-      sourceRef: entry.sourceRef,
-      sheetName: entry.sheetName,
-      rowNumber: entry.rowNumber,
-      kind,
-      signature: createSignature({ ...entry, kind }),
-    }
-
-    const duplicate = detailTyped.some(
-      (detail) =>
-        detail.kind === typed.kind &&
-        detail.amountCents === typed.amountCents &&
-        detail.periodKey === typed.periodKey,
-    )
-
-    if (!duplicate) {
-      fallbackTyped.push(typed)
-    }
-  }
-
-  const entries = dedupeBySignature([...detailTyped, ...fallbackTyped])
+  const dedupedEntries = dedupeBySignature(entries)
   const debt: ImportCandidateDebt = {
     sourceKey: debtSourceKey,
     borrowerSourceKey,
@@ -522,10 +760,10 @@ function parseSheet(sheetName: string, rows: string[][]): { debt: ImportCandidat
     label: debtLabel,
     notes: `Importe depuis ${sheetName}`,
     sheetName,
-    entries,
+    entries: dedupedEntries,
   }
 
-  return { debt, issues }
+  return { debt, issues, unresolvedEntries: dedupeUnresolvedBySignature(unresolvedEntries) }
 }
 
 async function fingerprintBytes(bytes: Uint8Array): Promise<string> {
@@ -536,22 +774,26 @@ async function fingerprintBytes(bytes: Uint8Array): Promise<string> {
     .join('')
 }
 
-async function buildPreview(file: File): Promise<ImportPreview> {
+async function buildPreview(file: File, resolutions: ImportIssueResolution[] = []): Promise<ImportPreview> {
   const buffer = await file.arrayBuffer()
   const rawBytes = new Uint8Array(buffer)
   const workbook = loadWorkbookRows(rawBytes)
+  const resolutionMap = createResolutionMap(resolutions)
   const debts: ImportCandidateDebt[] = []
   const issues: ImportIssue[] = []
+  const unresolvedEntries: ImportUnresolvedCandidate[] = []
 
   Object.entries(workbook).forEach(([sheetName, rows]) => {
-    const result = parseSheet(sheetName, rows)
+    const result = parseSheet(sheetName, rows, resolutionMap)
     if (result.debt) {
       debts.push(result.debt)
     }
     issues.push(...result.issues)
+    unresolvedEntries.push(...result.unresolvedEntries)
   })
 
   const entries = debts.flatMap((debt) => debt.entries)
+  const dedupedUnresolvedEntries = dedupeUnresolvedBySignature(unresolvedEntries)
   const borrowerCount = new Set(debts.map((debt) => debt.borrowerSourceKey)).size
 
   return {
@@ -559,11 +801,13 @@ async function buildPreview(file: File): Promise<ImportPreview> {
     fingerprint: await fingerprintBytes(rawBytes),
     debts,
     entries,
+    unresolvedEntries: dedupedUnresolvedEntries,
     issues,
     summary: {
       debtCount: debts.length,
       borrowerCount,
       entryCount: entries.length,
+      unresolvedCount: dedupedUnresolvedEntries.length,
       paymentCount: entries.filter((entry) => entry.kind === 'payment').length,
       advanceCount: entries.filter((entry) => entry.kind !== 'payment' && entry.kind !== 'adjustment').length,
       outstandingImportedCents: entries.reduce(
@@ -574,8 +818,11 @@ async function buildPreview(file: File): Promise<ImportPreview> {
   }
 }
 
-export async function parseOdsWorkbookFile(file: File): Promise<WorkbookImportPreviewV1> {
-  const preview = await buildPreview(file)
+export async function parseOdsWorkbookFile(
+  file: File,
+  options?: { resolutions?: ImportIssueResolution[] },
+): Promise<WorkbookImportPreviewV1> {
+  const preview = await buildPreview(file, options?.resolutions)
 
   return {
     version: 'workbook-import-preview-v1',

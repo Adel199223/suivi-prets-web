@@ -1,17 +1,23 @@
 import { buildAppSnapshot } from '../domain/ledger'
 import { nowIso, periodKeyFromDate, toSlug } from '../domain/format'
 import type {
-  AppBackupV1,
+  ApplyImportPreviewResult,
+  AutoPersistResult,
+  AppBackupV2,
   AppSnapshot,
   BorrowerRecord,
   DebtRecord,
   EntryKind,
   ImportPreview,
+  ImportIssueResolution,
   ImportSessionRecord,
   LedgerEntryRecord,
-  MetaRecord
+  MetaRecord,
+  UnresolvedImportRecord
 } from '../domain/types'
 import { db } from './db'
+import { createImportEntrySignature } from './importSignature'
+import { dedupeImportIssueResolutions, loadSavedImportResolutions, saveSavedImportResolutions } from './importResolutionMemory'
 
 function createId(): string {
   return crypto.randomUUID()
@@ -21,16 +27,26 @@ async function putMeta(key: string, value: string): Promise<void> {
   await db.meta.put({ key, value })
 }
 
+export async function recordAutoPersistResult(result: AutoPersistResult): Promise<void> {
+  const attemptedAt = nowIso()
+
+  await db.meta.bulkPut([
+    { key: 'autoPersistAttemptedAt', value: attemptedAt } satisfies MetaRecord,
+    { key: 'autoPersistResult', value: result ?? 'unsupported' } satisfies MetaRecord,
+  ])
+}
+
 export async function buildSnapshot(): Promise<AppSnapshot> {
-  const [borrowers, debts, entries, imports, meta] = await Promise.all([
+  const [borrowers, debts, entries, imports, unresolvedImports, meta] = await Promise.all([
     db.borrowers.toArray(),
     db.debts.toArray(),
     db.entries.toArray(),
     db.imports.toArray(),
+    db.unresolvedImports.filter((record) => record.resolvedAt === null).toArray(),
     db.meta.toArray()
   ])
 
-  return buildAppSnapshot({ borrowers, debts, entries, imports, meta })
+  return buildAppSnapshot({ borrowers, debts, entries, imports, unresolvedImports, meta })
 }
 
 export async function createBorrower(input: { name: string; notes?: string }): Promise<BorrowerRecord> {
@@ -146,12 +162,67 @@ export async function setDebtClosed(debtId: string, closed: boolean): Promise<vo
   })
 }
 
-export async function exportBackup(): Promise<AppBackupV1> {
-  const [borrowers, debts, entries, imports, meta] = await Promise.all([
+async function ensureImportBorrowerAndDebt(
+  input: {
+    borrowerSourceKey: string
+    borrowerName: string
+    debtSourceKey: string
+    debtLabel: string
+    debtNotes: string
+  },
+  state: {
+    borrowersBySource: Map<string, BorrowerRecord>
+    debtsBySource: Map<string, DebtRecord>
+  },
+  now: string,
+): Promise<{ borrower: BorrowerRecord; debt: DebtRecord }> {
+  let borrower = state.borrowersBySource.get(input.borrowerSourceKey)
+  if (!borrower) {
+    borrower = {
+      id: createId(),
+      name: input.borrowerName,
+      notes: '',
+      sourceKey: input.borrowerSourceKey,
+      createdAt: now,
+      updatedAt: now,
+    }
+    await db.borrowers.add(borrower)
+    state.borrowersBySource.set(input.borrowerSourceKey, borrower)
+  }
+
+  let debt = state.debtsBySource.get(input.debtSourceKey)
+  if (!debt) {
+    debt = {
+      id: createId(),
+      borrowerId: borrower.id,
+      label: input.debtLabel,
+      notes: input.debtNotes,
+      status: 'open',
+      currency: 'EUR',
+      sourceKey: input.debtSourceKey,
+      createdAt: now,
+      updatedAt: now,
+      closedAt: null,
+    }
+    await db.debts.add(debt)
+    state.debtsBySource.set(input.debtSourceKey, debt)
+  }
+
+  return { borrower, debt }
+}
+
+function buildResolvedImportDescription(description: string, periodKey: string): string {
+  const normalized = description.trim()
+  return `${normalized || 'Import detail'} [periode resolue dans l'app: ${periodKey}]`
+}
+
+export async function exportBackup(): Promise<AppBackupV2> {
+  const [borrowers, debts, entries, imports, unresolvedImports, meta] = await Promise.all([
     db.borrowers.toArray(),
     db.debts.toArray(),
     db.entries.toArray(),
     db.imports.toArray(),
+    db.unresolvedImports.toArray(),
     db.meta.toArray()
   ])
 
@@ -164,23 +235,25 @@ export async function exportBackup(): Promise<AppBackupV1> {
   await putMeta('lastBackupAt', exportedAt)
 
   return {
-    version: 'app-backup-v1',
+    version: 'app-backup-v2',
     exportedAt,
     borrowers,
     debts,
     entries,
     imports,
+    unresolvedImports,
     meta: nextMeta
   }
 }
 
-export async function replaceFromBackup(backup: AppBackupV1): Promise<void> {
-  await db.transaction('rw', [db.borrowers, db.debts, db.entries, db.imports, db.meta], async () => {
+export async function replaceFromBackup(backup: AppBackupV2): Promise<void> {
+  await db.transaction('rw', [db.borrowers, db.debts, db.entries, db.imports, db.unresolvedImports, db.meta], async () => {
     await Promise.all([
       db.borrowers.clear(),
       db.debts.clear(),
       db.entries.clear(),
       db.imports.clear(),
+      db.unresolvedImports.clear(),
       db.meta.clear()
     ])
 
@@ -196,13 +269,16 @@ export async function replaceFromBackup(backup: AppBackupV1): Promise<void> {
     if (backup.imports.length > 0) {
       await db.imports.bulkAdd(backup.imports)
     }
+    if (backup.unresolvedImports.length > 0) {
+      await db.unresolvedImports.bulkAdd(backup.unresolvedImports)
+    }
     if (backup.meta.length > 0) {
       await db.meta.bulkPut(backup.meta)
     }
   })
 }
 
-export async function applyImportPreview(preview: ImportPreview): Promise<ImportSessionRecord> {
+export async function applyImportPreview(preview: ImportPreview): Promise<ApplyImportPreviewResult> {
   const now = nowIso()
   const importSession: ImportSessionRecord = {
     id: createId(),
@@ -213,11 +289,14 @@ export async function applyImportPreview(preview: ImportPreview): Promise<Import
     appliedDebts: 0,
     appliedEntries: 0,
     duplicateEntries: 0,
+    queuedUnresolvedCount: 0,
     issueCount: preview.issues.length,
-    notes: `Import ${preview.summary.entryCount} ecritures`
+    notes: `Import ${preview.summary.entryCount} ecritures + ${preview.summary.unresolvedCount} ligne(s) en attente`
   }
+  const affectedBorrowerIds = new Set<string>()
+  const affectedDebtIds = new Set<string>()
 
-  await db.transaction('rw', db.borrowers, db.debts, db.entries, db.imports, async () => {
+  await db.transaction('rw', [db.borrowers, db.debts, db.entries, db.imports, db.unresolvedImports], async () => {
     const borrowersBySource = new Map<string, BorrowerRecord>()
     const debtsBySource = new Map<string, DebtRecord>()
 
@@ -234,37 +313,25 @@ export async function applyImportPreview(preview: ImportPreview): Promise<Import
     }
 
     for (const candidateDebt of preview.debts) {
-      let borrower = borrowersBySource.get(candidateDebt.borrowerSourceKey)
-      if (!borrower) {
-        borrower = {
-          id: createId(),
-          name: candidateDebt.borrowerName,
-          notes: '',
-          sourceKey: candidateDebt.borrowerSourceKey,
-          createdAt: now,
-          updatedAt: now
-        }
-        await db.borrowers.add(borrower)
-        borrowersBySource.set(candidateDebt.borrowerSourceKey, borrower)
+      const borrowerExisted = borrowersBySource.has(candidateDebt.borrowerSourceKey)
+      const debtExisted = debtsBySource.has(candidateDebt.sourceKey)
+      const { borrower, debt } = await ensureImportBorrowerAndDebt(
+        {
+          borrowerSourceKey: candidateDebt.borrowerSourceKey,
+          borrowerName: candidateDebt.borrowerName,
+          debtSourceKey: candidateDebt.sourceKey,
+          debtLabel: candidateDebt.label,
+          debtNotes: candidateDebt.notes,
+        },
+        { borrowersBySource, debtsBySource },
+        now,
+      )
+      affectedBorrowerIds.add(borrower.id)
+      affectedDebtIds.add(debt.id)
+      if (!borrowerExisted) {
         importSession.appliedBorrowers += 1
       }
-
-      let debt = debtsBySource.get(candidateDebt.sourceKey)
-      if (!debt) {
-        debt = {
-          id: createId(),
-          borrowerId: borrower.id,
-          label: candidateDebt.label,
-          notes: candidateDebt.notes,
-          status: 'open',
-          currency: 'EUR',
-          sourceKey: candidateDebt.sourceKey,
-          createdAt: now,
-          updatedAt: now,
-          closedAt: null
-        }
-        await db.debts.add(debt)
-        debtsBySource.set(candidateDebt.sourceKey, debt)
+      if (!debtExisted) {
         importSession.appliedDebts += 1
       }
 
@@ -295,19 +362,174 @@ export async function applyImportPreview(preview: ImportPreview): Promise<Import
       }
     }
 
+    for (const unresolvedEntry of preview.unresolvedEntries) {
+      const borrowerExisted = borrowersBySource.has(unresolvedEntry.borrowerSourceKey)
+      const debtExisted = debtsBySource.has(unresolvedEntry.debtSourceKey)
+      const { borrower, debt } = await ensureImportBorrowerAndDebt(
+        {
+          borrowerSourceKey: unresolvedEntry.borrowerSourceKey,
+          borrowerName: unresolvedEntry.borrowerName,
+          debtSourceKey: unresolvedEntry.debtSourceKey,
+          debtLabel: unresolvedEntry.debtLabel,
+          debtNotes: `Importe depuis ${unresolvedEntry.sheetName}`,
+        },
+        { borrowersBySource, debtsBySource },
+        now,
+      )
+      affectedBorrowerIds.add(borrower.id)
+      affectedDebtIds.add(debt.id)
+      if (!borrowerExisted) {
+        importSession.appliedBorrowers += 1
+      }
+      if (!debtExisted) {
+        importSession.appliedDebts += 1
+      }
+
+      const existing = await db.unresolvedImports.where('signature').equals(unresolvedEntry.signature).first()
+      if (existing) {
+        continue
+      }
+
+      const record: UnresolvedImportRecord = {
+        id: createId(),
+        fileName: preview.fileName,
+        fingerprint: preview.fingerprint,
+        borrowerId: borrower.id,
+        borrowerSourceKey: unresolvedEntry.borrowerSourceKey,
+        borrowerName: unresolvedEntry.borrowerName,
+        debtId: debt.id,
+        debtSourceKey: unresolvedEntry.debtSourceKey,
+        debtLabel: unresolvedEntry.debtLabel,
+        kind: unresolvedEntry.kind,
+        amountCents: unresolvedEntry.amountCents,
+        occurredOn: unresolvedEntry.occurredOn,
+        description: unresolvedEntry.description,
+        sourceRef: unresolvedEntry.sourceRef,
+        sheetName: unresolvedEntry.sheetName,
+        rowNumber: unresolvedEntry.rowNumber,
+        reasonCode: unresolvedEntry.reasonCode,
+        reasonMessage: unresolvedEntry.reasonMessage,
+        signature: unresolvedEntry.signature,
+        importSessionId: importSession.id,
+        resolutionPeriodKey: null,
+        createdAt: now,
+        updatedAt: now,
+        resolvedAt: null,
+      }
+
+      await db.unresolvedImports.add(record)
+      importSession.queuedUnresolvedCount += 1
+    }
+
     await db.imports.add(importSession)
   })
 
-  return importSession
+  return {
+    session: importSession,
+    mode: importSession.queuedUnresolvedCount > 0 ? 'partial' : 'full',
+    affectedBorrowerIds: [...affectedBorrowerIds],
+    affectedDebtIds: [...affectedDebtIds],
+  }
+}
+
+export async function resolveUnresolvedImport(unresolvedImportId: string, periodKey: string): Promise<void> {
+  const normalizedPeriodKey = periodKey.trim()
+  if (!/^\d{4}-\d{2}$/.test(normalizedPeriodKey)) {
+    throw new Error('Choisissez une periode valide au format AAAA-MM.')
+  }
+
+  await db.transaction('rw', [db.borrowers, db.debts, db.entries, db.unresolvedImports, db.meta], async () => {
+    const pending = await db.unresolvedImports.get(unresolvedImportId)
+    if (!pending || pending.resolvedAt) {
+      throw new Error('Cette ligne en attente est introuvable ou deja resolue.')
+    }
+
+    const borrowersBySource = new Map<string, BorrowerRecord>()
+    const debtsBySource = new Map<string, DebtRecord>()
+    for (const borrower of await db.borrowers.toArray()) {
+      if (borrower.sourceKey) {
+        borrowersBySource.set(borrower.sourceKey, borrower)
+      }
+    }
+    for (const debt of await db.debts.toArray()) {
+      if (debt.sourceKey) {
+        debtsBySource.set(debt.sourceKey, debt)
+      }
+    }
+
+    const { borrower, debt } = await ensureImportBorrowerAndDebt(
+      {
+        borrowerSourceKey: pending.borrowerSourceKey,
+        borrowerName: pending.borrowerName,
+        debtSourceKey: pending.debtSourceKey,
+        debtLabel: pending.debtLabel,
+        debtNotes: `Importe depuis ${pending.sheetName}`,
+      },
+      { borrowersBySource, debtsBySource },
+      nowIso(),
+    )
+
+    const now = nowIso()
+    const description = buildResolvedImportDescription(pending.description, normalizedPeriodKey)
+    const signature = createImportEntrySignature({
+      borrowerSourceKey: pending.borrowerSourceKey,
+      debtSourceKey: pending.debtSourceKey,
+      kind: pending.kind,
+      amountCents: pending.amountCents,
+      periodKey: normalizedPeriodKey,
+      occurredOn: pending.occurredOn,
+      description,
+    })
+
+    const existingEntry = await db.entries.where('signature').equals(signature).first()
+    if (!existingEntry) {
+      const entry: LedgerEntryRecord = {
+        id: createId(),
+        debtId: debt.id,
+        kind: pending.kind,
+        amountCents: pending.amountCents,
+        periodKey: normalizedPeriodKey,
+        occurredOn: pending.occurredOn,
+        description,
+        sourceRef: pending.sourceRef,
+        signature,
+        importSessionId: pending.importSessionId,
+        createdAt: now,
+        updatedAt: now,
+      }
+      await db.entries.add(entry)
+    }
+
+    await db.unresolvedImports.update(pending.id, {
+      borrowerId: borrower.id,
+      debtId: debt.id,
+      resolutionPeriodKey: normalizedPeriodKey,
+      resolvedAt: now,
+      updatedAt: now,
+    })
+
+    const savedResolutions = await loadSavedImportResolutions(pending.fingerprint)
+    const nextResolutions = dedupeImportIssueResolutions([
+      ...savedResolutions,
+      {
+        sheetName: pending.sheetName,
+        rowNumber: pending.rowNumber,
+        periodKey: normalizedPeriodKey,
+        occurredOn: pending.occurredOn,
+      } satisfies ImportIssueResolution,
+    ])
+    await saveSavedImportResolutions(pending.fingerprint, nextResolutions)
+  })
 }
 
 export async function resetAllData(): Promise<void> {
-  await db.transaction('rw', [db.borrowers, db.debts, db.entries, db.imports, db.meta], async () => {
+  await db.transaction('rw', [db.borrowers, db.debts, db.entries, db.imports, db.unresolvedImports, db.meta], async () => {
     await Promise.all([
       db.borrowers.clear(),
       db.debts.clear(),
       db.entries.clear(),
       db.imports.clear(),
+      db.unresolvedImports.clear(),
       db.meta.clear()
     ])
   })

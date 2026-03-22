@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildAppSnapshot, computeDebtView } from './ledger'
-import type { BorrowerRecord, DebtRecord, LedgerEntryRecord } from './types'
+import type { BorrowerRecord, DebtRecord, LedgerEntryRecord, UnresolvedImportRecord } from './types'
 
 const borrower: BorrowerRecord = {
   id: 'b1',
@@ -69,6 +69,35 @@ const entries: LedgerEntryRecord[] = [
   }
 ]
 
+const pendingImports: UnresolvedImportRecord[] = [
+  {
+    id: 'u1',
+    fileName: 'suivi.ods',
+    fingerprint: 'fingerprint',
+    borrowerId: 'b1',
+    borrowerSourceKey: 'adel',
+    borrowerName: 'Adel',
+    debtId: 'd1',
+    debtSourceKey: 'adel:maison',
+    debtLabel: 'Maison',
+    kind: 'advance',
+    amountCents: 15_000,
+    occurredOn: null,
+    description: 'Virement',
+    sourceRef: 'dette_adel_1:2',
+    sheetName: 'dette_adel_1',
+    rowNumber: 2,
+    reasonCode: 'missing_period',
+    reasonMessage: 'Impossible de deduire la periode.',
+    signature: 'pending-one',
+    importSessionId: 'import-1',
+    resolutionPeriodKey: null,
+    createdAt: '2026-03-20T00:00:00.000Z',
+    updatedAt: '2026-03-20T00:00:00.000Z',
+    resolvedAt: null
+  }
+]
+
 describe('ledger', () => {
   it('computes outstanding balance and annual summaries', () => {
     const view = computeDebtView(debt, borrower, entries)
@@ -85,10 +114,15 @@ describe('ledger', () => {
       debts: [debt],
       entries,
       imports: [],
+      unresolvedImports: pendingImports,
       meta: []
     })
 
     expect(snapshot.borrowers[0]?.outstandingCents).toBe(185_000)
+    expect(snapshot.borrowers[0]?.pendingImportedCents).toBe(15_000)
+    expect(snapshot.borrowers[0]?.pendingImports).toHaveLength(1)
+    expect(snapshot.debts[0]?.pendingImports).toHaveLength(1)
+    expect(snapshot.pendingImportedCents).toBe(15_000)
     expect(snapshot.totalPaidCents).toBe(25_000)
   })
 })

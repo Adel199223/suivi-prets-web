@@ -1,6 +1,6 @@
 {
   "version": "workbook-import-preview-v1",
-  "generatedAt": "2026-03-21T01:26:44.653819Z",
+  "generatedAt": "2026-03-21T10:36:50.388985Z",
   "preview": {
     "fileName": "full-workbook.ods",
     "fingerprint": "faf54103cad7502e3fbc84048cda3eb53ce0d9cbecc92fd032ac34f7ebdbccf3",
@@ -458,11 +458,13 @@
         "signature": "samira|samira:sante|opening_balance|90000|2025-01|2025-01-06|aide sante"
       }
     ],
+    "unresolvedEntries": [],
     "issues": [],
     "summary": {
       "debtCount": 6,
       "borrowerCount": 4,
       "entryCount": 13,
+      "unresolvedCount": 0,
       "paymentCount": 4,
       "advanceCount": 9,
       "outstandingImportedCents": 3145000

@@ -46,6 +46,17 @@ function DebtCard({
         <MetricCard label="Dernier paiement" value={formatDate(debtView.lastPaymentOn)} />
       </div>
 
+      {debtView.unresolvedImportCount > 0 ? (
+        <div className="compact-status-row compact-status-row-inline">
+          <span className="status-chip status-chip-warning">
+            {debtView.unresolvedImportCount} ligne(s) en attente
+          </span>
+          <p className="section-note">
+            {formatMoney(debtView.pendingImportedCents)} restent hors solde tant que le mois manque.
+          </p>
+        </div>
+      ) : null}
+
       <div className="button-row">
         <button type="button" onClick={() => setComposer(composer === 'payment' ? null : 'payment')}>
           Enregistrer un paiement
@@ -93,6 +104,7 @@ export function BorrowerPage({
   const [occurredOn, setOccurredOn] = useState('')
   const [notes, setNotes] = useState('')
   const [borrowerNotes, setBorrowerNotes] = useState(borrowerView.borrower.notes)
+  const [showBorrowerNotesEditor, setShowBorrowerNotesEditor] = useState(Boolean(borrowerView.borrower.notes.trim()))
   const [error, setError] = useState<string | null>(null)
 
   async function handleCreateDebt(event: React.FormEvent<HTMLFormElement>) {
@@ -137,17 +149,64 @@ export function BorrowerPage({
             <p className="eyebrow">Fiche emprunteur</p>
             <h2>Notes</h2>
           </div>
-          <button type="button" onClick={() => onUpdateBorrowerNotes(borrowerView.borrower.id, borrowerNotes)}>
-            Enregistrer les notes
-          </button>
+          {showBorrowerNotesEditor ? (
+            <button type="button" onClick={() => onUpdateBorrowerNotes(borrowerView.borrower.id, borrowerNotes)}>
+              Enregistrer les notes
+            </button>
+          ) : (
+            <button type="button" className="ghost-button" onClick={() => setShowBorrowerNotesEditor(true)}>
+              Ajouter des notes
+            </button>
+          )}
         </div>
-        <textarea
-          aria-label="Notes emprunteur"
-          className="notes-area"
-          value={borrowerNotes}
-          onChange={(event) => setBorrowerNotes(event.target.value)}
-        />
+        {showBorrowerNotesEditor ? (
+          <textarea
+            aria-label="Notes emprunteur"
+            className="notes-area notes-area-compact"
+            value={borrowerNotes}
+            onChange={(event) => setBorrowerNotes(event.target.value)}
+          />
+        ) : (
+          <p className="empty-state">Aucune note pour le moment.</p>
+        )}
       </section>
+
+      {borrowerView.unresolvedImportCount > 0 ? (
+        <section className="section-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Import partiel</p>
+              <h2>Lignes en attente pour cet emprunteur</h2>
+            </div>
+            <Link className="inline-link" to="/import">
+              Completer depuis Import & sauvegarde
+            </Link>
+          </div>
+          <div className="notice-panel notice-panel-warning notice-panel-compact">
+            <strong>{borrowerView.unresolvedImportCount} ligne(s) d’import attendent encore leur mois.</strong>
+            <p className="section-note">
+              Solde deja utilisable maintenant: <strong>{formatMoney(borrowerView.outstandingCents)}</strong>. Montant encore
+              hors total: <strong>{formatMoney(borrowerView.pendingImportedCents)}</strong>.
+            </p>
+          </div>
+          <details className="details-disclosure">
+            <summary>Voir le detail des lignes en attente</summary>
+            <div className="list-stack">
+              {borrowerView.pendingImports.map((item) => (
+                <article className="resolution-row" key={item.id}>
+                  <div>
+                    <strong>{item.debtLabel}</strong>
+                    <p>
+                      {formatMoney(item.amountCents)} · {item.sheetName} · ligne {item.rowNumber}
+                    </p>
+                    <p>{item.reasonMessage}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </details>
+        </section>
+      ) : null}
 
       <section className="section-card">
         <div className="section-heading">

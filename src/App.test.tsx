@@ -8,7 +8,30 @@ import * as backupModule from './lib/backup'
 import { buildWorkbookFile } from '../test/fixtures/import/files'
 
 describe('App', () => {
+  let persistentEnabled = false
+  let persistedMock: ReturnType<typeof vi.fn>
+  let persistMock: ReturnType<typeof vi.fn>
+  let estimateMock: ReturnType<typeof vi.fn>
+
   beforeEach(async () => {
+    persistentEnabled = false
+    persistedMock = vi.fn(async () => persistentEnabled)
+    persistMock = vi.fn(async () => {
+      persistentEnabled = true
+      return true
+    })
+    estimateMock = vi.fn(async () => ({
+      quota: 512 * 1024 * 1024,
+      usage: 8 * 1024 * 1024
+    }))
+    Object.defineProperty(window.navigator, 'storage', {
+      configurable: true,
+      value: {
+        persisted: persistedMock,
+        persist: persistMock,
+        estimate: estimateMock
+      }
+    })
     await resetAllData()
     vi.spyOn(backupModule, 'downloadJson').mockImplementation(() => {})
     vi.stubGlobal('confirm', vi.fn(() => true))
@@ -36,15 +59,16 @@ describe('App', () => {
     await user.type(screen.getByLabelText('Date precise dette'), '2026-03-01')
     await user.click(screen.getByRole('button', { name: /creer la dette/i }))
 
-    await screen.findByRole('heading', { name: 'Loyer' })
+    await screen.findByRole('heading', { name: 'Loyer', level: 1 })
     await user.click(screen.getByRole('button', { name: /enregistrer un paiement/i }))
-    await user.type(screen.getAllByLabelText('Montant (€)')[0]!, '200')
-    await user.type(screen.getAllByLabelText('Date precise')[0]!, '2026-03-15')
+    await user.type(await screen.findByLabelText('Montant (€)'), '200')
+    await user.type(await screen.findByLabelText('Date precise'), '2026-03-15')
     await user.click(screen.getByRole('button', { name: /valider le paiement/i }))
     await screen.findByText(/paiement enregistre/i)
 
-    await user.type(screen.getAllByLabelText('Montant (€)')[1]!, '50')
-    await user.type(screen.getAllByLabelText('Date precise')[1]!, '2026-03-18')
+    await user.click(screen.getByRole('button', { name: /ajouter une avance/i }))
+    await user.type(await screen.findByLabelText('Montant (€)'), '50')
+    await user.type(await screen.findByLabelText('Date precise'), '2026-03-18')
     await user.click(screen.getByRole('button', { name: /valider l’avance/i }))
     await screen.findByText(/avance enregistree/i)
 
@@ -52,8 +76,9 @@ describe('App', () => {
     await screen.findByText(/dette cloturee/i)
 
     await user.click(screen.getByRole('link', { name: /import & sauvegarde/i }))
-    await screen.findByRole('heading', { name: /centre de confiance/i })
-    await user.click(screen.getByRole('button', { name: /exporter la sauvegarde/i }))
+    await screen.findByRole('heading', { name: /protection des donnees/i })
+    await user.click(screen.getByText(/copie de secours \(optionnel\)/i))
+    await user.click(screen.getByRole('button', { name: /exporter une copie de secours/i }))
     await waitFor(() => {
       expect(backupModule.downloadJson).toHaveBeenCalled()
     })
@@ -66,33 +91,45 @@ describe('App', () => {
       await resetAllData()
     })
     const backupFile = new File([backupModule.serializeBackup(backup)], 'restore.json', { type: 'application/json' })
-    await user.upload(screen.getByLabelText(/restaurer une sauvegarde json/i), backupFile)
+    await user.upload(screen.getByLabelText(/restaurer une copie de secours/i), backupFile)
     expect(window.confirm).toHaveBeenCalled()
     await screen.findByText(/sauvegarde restauree/i)
     await screen.findByText(/amina/i)
   })
 
-  it('imports a workbook .ods file and shows the merged data in the same app session', async () => {
+  it('imports a safe workbook .ods file and shows the merged data in the same app session', async () => {
     const user = userEvent.setup()
-    render(
+    const view = render(
       <MemoryRouter initialEntries={['/import']}>
         <App />
       </MemoryRouter>
     )
 
-    await screen.findByRole('heading', { name: /centre de confiance/i })
+    await screen.findByRole('heading', { name: /protection des donnees/i })
     await user.upload(screen.getByLabelText(/choisir un classeur \.ods/i), buildWorkbookFile('partial-workbook.ods'))
     await screen.findByText(/classeur analyse/i)
     await screen.findByRole('heading', { name: /emprunteurs reperes/i })
     await screen.findByText('Adel')
     await screen.findByText('Fatiha')
     await user.click(screen.getByRole('button', { name: /importer ce classeur/i }))
-    await screen.findByText(/import fusionne dans ce navigateur/i)
-    await screen.findByRole('link', { name: /adel/i })
-    await screen.findByRole('link', { name: /fatiha/i })
+    await screen.findByText(/import termine: les donnees sont visibles dans ce navigateur/i)
+    await screen.findByRole('link', { name: /ouvrir adel/i })
+    await screen.findByRole('link', { name: /ouvrir fatiha/i })
+    expect(screen.queryByRole('heading', { name: /protection des donnees/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/sauvegarde requise/i)).not.toBeInTheDocument()
+    expect(persistMock).toHaveBeenCalledTimes(1)
+
+    view.unmount()
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>
+    )
+    await screen.findByText(/adel/i)
+    expect(screen.queryByText(/sauvegarde requise/i)).not.toBeInTheDocument()
   })
 
-  it('blocks final import when the workbook still has ambiguous rows', async () => {
+  it('partially imports a workbook, keeps one queued line, and resolves it later from the same app', async () => {
     const user = userEvent.setup()
     render(
       <MemoryRouter initialEntries={['/import']}>
@@ -100,10 +137,95 @@ describe('App', () => {
       </MemoryRouter>
     )
 
-    await screen.findByRole('heading', { name: /centre de confiance/i })
+    await screen.findByRole('heading', { name: /protection des donnees/i })
     await user.upload(screen.getByLabelText(/choisir un classeur \.ods/i), buildWorkbookFile('broken-workbook.ods'))
-    await screen.findByText(/import bloque tant que le fichier reste ambigu/i)
-    expect(screen.getByRole('button', { name: /importer ce classeur/i })).toBeDisabled()
-    expect(screen.getByText(/ligne 2/i)).toBeInTheDocument()
+
+    await screen.findByText(/import partiel disponible/i)
+    expect(screen.getByRole('button', { name: /importer les lignes sures maintenant/i })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: /importer les lignes sures maintenant/i }))
+    await screen.findByText(/import partiel termine: les donnees sures sont deja visibles/i)
+    await screen.findByText(/1 ligne\(s\) d’import restent en attente/i)
+    await screen.findByRole('link', { name: /ouvrir adel/i })
+
+    await user.click(screen.getByRole('link', { name: /ouvrir adel/i }))
+    await screen.findByRole('heading', { name: /lignes en attente pour cet emprunteur/i })
+    await screen.findByText(/montant encore hors total/i)
+    await user.click(screen.getByText(/voir le detail des lignes en attente/i))
+    await screen.findByText(/dette_adel_1 · ligne 2/i)
+
+    await user.click(screen.getByRole('link', { name: /voir le detail/i }))
+    await screen.findByRole('heading', { name: /lignes en attente pour cette dette/i })
+    await user.click(screen.getByText(/voir la ligne en attente/i))
+    await screen.findByText(/aucune ecriture comptabilisee pour le moment/i)
+
+    await user.click(screen.getAllByRole('link', { name: /import & sauvegarde/i })[0]!)
+    await screen.findByRole('heading', { name: /lignes en attente/i })
+    await user.type(screen.getByLabelText(/mois a appliquer pour dette_adel_1 ligne 2/i), '2024-01')
+    await user.click(screen.getByRole('button', { name: /ajouter cette ligne a la dette/i }))
+    await screen.findByText(/ligne en attente resolue/i)
+
+    await waitFor(() => {
+      expect(screen.queryByText(/dette_adel_1 · ligne 2/i)).not.toBeInTheDocument()
+    })
+  })
+
+  it('lets the user manually reinforce local protection after an automatic persistence attempt was denied', async () => {
+    const user = userEvent.setup()
+    persistMock
+      .mockImplementationOnce(async () => false)
+      .mockImplementationOnce(async () => {
+        persistentEnabled = true
+        return true
+      })
+
+    render(
+      <MemoryRouter initialEntries={['/import']}>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByRole('heading', { name: /protection des donnees/i })
+    await user.upload(screen.getByLabelText(/choisir un classeur \.ods/i), buildWorkbookFile('partial-workbook.ods'))
+    await user.click(await screen.findByRole('button', { name: /importer ce classeur/i }))
+
+    await screen.findByText(/enregistre sur cet appareil/i)
+    expect(persistMock).toHaveBeenCalledTimes(1)
+
+    await user.click(screen.getAllByRole('link', { name: /import & sauvegarde/i })[0]!)
+    await user.click(screen.getByText(/copie de secours \(optionnel\)/i))
+    await screen.findByRole('button', { name: /renforcer la protection locale/i })
+    await user.click(screen.getByRole('button', { name: /renforcer la protection locale/i }))
+
+    await screen.findByText(/protection locale renforcee/i)
+    expect(persistMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('reuses a remembered correction on reimport after a queued line was resolved once', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/import']}>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByRole('heading', { name: /protection des donnees/i })
+    await user.upload(screen.getByLabelText(/choisir un classeur \.ods/i), buildWorkbookFile('broken-workbook.ods'))
+    await screen.findByRole('button', { name: /importer les lignes sures maintenant/i })
+    await user.click(screen.getByRole('button', { name: /importer les lignes sures maintenant/i }))
+    const queueLinks = await screen.findAllByRole('link', { name: /completer la file/i })
+    await user.click(queueLinks[0]!)
+    await screen.findByLabelText(/mois a appliquer pour dette_adel_1 ligne 2/i)
+    await user.type(screen.getByLabelText(/mois a appliquer pour dette_adel_1 ligne 2/i), '2024-01')
+    await user.click(screen.getByRole('button', { name: /ajouter cette ligne a la dette/i }))
+    await screen.findByText(/ligne en attente resolue/i)
+
+    await user.upload(screen.getByLabelText(/choisir un classeur \.ods/i), buildWorkbookFile('broken-workbook.ods'))
+    await screen.findByText(/correction\(s\) locale\(s\) memorisee\(s\) sont reappliquee\(s\) pour ce fichier exact/i)
+    expect(screen.getByRole('button', { name: /importer ce classeur/i })).toBeEnabled()
+    expect(screen.queryByText(/import partiel disponible/i)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /importer ce classeur/i }))
+    await screen.findByText(/0 ligne\(s\) ajoutee\(s\), 1 deja presente\(s\)/i)
   })
 })

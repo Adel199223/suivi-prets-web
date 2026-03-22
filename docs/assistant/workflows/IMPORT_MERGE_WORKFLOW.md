@@ -10,7 +10,7 @@ Use this workflow for workbook-family parsing, preview, dedupe, anomaly review, 
 - Explicit duplicate handling
 - Clear anomaly reporting
 - Clear user-facing preview behavior for direct `.ods` import
-- Explicit local resolution guidance for rows that still cannot be inferred safely
+- Clear partial-import behavior and unresolved-queue presentation for rows that still cannot be inferred safely
 
 ## When To Use
 
@@ -50,11 +50,12 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm test"
 ## Failure Modes and Fallback Steps
 
 - If the parser cannot trust a row, raise an issue instead of importing it.
-- If a row is ambiguous in the browser parser, block final import and show the sheet/row plainly in the app.
+- If a row is missing only its month but the borrower, debt, amount, and kind are still trustworthy, queue it locally, import the safe rows now, and show the pending line clearly in the app.
+- If a row is ambiguous in a broader way, block final import and show the sheet/row plainly in the app.
 - If a row is still ambiguous after conservative parsing, use a local `workbook-import-resolutions-v1` file keyed by workbook fingerprint and sheet/row coordinates instead of broadening parser inference.
 - If duplicate imports appear, inspect normalized signatures before changing workbook-level matching.
 - If the local fallback tool and browser parser disagree, treat the shared `ImportPreview` contract as the boundary and fix the generator or parser before importing more private data.
-- If the preview is confusing, keep the import conservative and show issues rather than guessing.
+- If the preview is confusing, keep the import conservative, surface the pending queue clearly, and avoid guessing hidden months.
 
 ## Handoff Checklist
 
@@ -62,4 +63,5 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm test"
 - Confirm duplicate signature behavior
 - Confirm anomalies are visible to the operator
 - Confirm the import lands in the same visible browser session after merge
+- Confirm queued unresolved rows stay outside balances until resolved
 - Confirm any local resolution file matches the target workbook fingerprint and only covers intentional rows

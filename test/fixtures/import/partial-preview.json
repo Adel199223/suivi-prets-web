@@ -1,6 +1,6 @@
 {
   "version": "workbook-import-preview-v1",
-  "generatedAt": "2026-03-21T01:26:44.595324Z",
+  "generatedAt": "2026-03-21T10:36:50.316220Z",
   "preview": {
     "fileName": "partial-workbook.ods",
     "fingerprint": "7be15167c3a2504f71f28d78dd5673968c44956e0b84bad4f37224137cf57896",
@@ -438,11 +438,13 @@
         "signature": "fatiha|fatiha:dette-principale|payment|100000|2024-04|2024-04-05|paiement avril"
       }
     ],
+    "unresolvedEntries": [],
     "issues": [],
     "summary": {
       "debtCount": 4,
       "borrowerCount": 2,
       "entryCount": 13,
+      "unresolvedCount": 0,
       "paymentCount": 5,
       "advanceCount": 8,
       "outstandingImportedCents": 2915000

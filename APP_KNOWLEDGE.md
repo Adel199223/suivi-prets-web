@@ -19,6 +19,8 @@ The product is designed around fast daily money tracking:
 - Mobile and tablet responsive polish has been applied across the app shell, debt surfaces, and trust center layouts.
 - JSON export, restore confirmation, and backup freshness guidance are implemented.
 - Direct in-app `.ods` import with deterministic preview and same-session merge is implemented.
+- Partial `.ods` import is implemented: safe rows land immediately, while unresolved-but-queueable rows stay in a local pending queue until their month is completed.
+- Dashboard, borrower, debt, and import surfaces now use calmer UX: healthy protection states are compact, pending-import details are collapsed by default, and backup/export tools are demoted behind an optional advanced section.
 - The WSL-local `.ods` preview generator remains available as an operator fallback for fixtures, regression checks, and exceptional private review work.
 - Fingerprint-guarded local resolution files can patch truly ambiguous workbook rows before preview generation.
 - Docs harness, validators, and browser validation harness are implemented.
@@ -51,7 +53,7 @@ The product is designed around fast daily money tracking:
 - `Debt`: one labeled debt under a borrower
 - `LedgerEntry`: `opening_balance`, `advance`, `payment`, or `adjustment`
 - `ImportSession`: audit trail for a workbook import attempt
-- `AppBackupV1`: portable JSON backup of the local dataset
+- `AppBackupV2`: portable JSON backup of the local dataset, including unresolved queued import rows
 
 All monetary values are stored in integer euro cents.
 
@@ -76,7 +78,9 @@ All monetary values are stored in integer euro cents.
 - Annual total rows, placeholder rows, and blank rows are ignored.
 - Continuation rows can inherit the previous resolved period only when the workbook structure makes that relationship explicit.
 - Non-`dette_*` sheets are ignored and treated as informational, not blocking.
-- Ambiguous rows block final import; the app does not partially import by default.
+- If a row is missing only its month but the borrower, debt, amount, and kind are still safe, the app imports the trustworthy rows now and stores that one row in a local unresolved queue instead of guessing.
+- Queued unresolved rows stay visible on the dashboard, borrower page, debt page, and import page, but they do not affect balances, timelines, or annual summaries until resolved.
+- Hard parser failures or malformed rows still block import completely.
 - Repeated imports dedupe by normalized entry signature instead of workbook hash alone.
 - Merge results are recorded in `ImportSession`.
 
@@ -90,6 +94,7 @@ Current stores:
 - `debts`
 - `entries`
 - `imports`
+- `unresolvedImports`
 - `meta`
 
 ## Validation Commands
@@ -111,8 +116,9 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:ui"
 
 - This is a single-user local-first app for v1.
 - There is no borrower portal, bank sync, or multi-device sync.
-- Data safety depends on backups and the browser storage policy.
+- Data is autosaved locally in the current browser on the current device; exported backups are optional portable copies for device changes, browser resets, and larger recovery moments.
 - Real workbook files, generated preview artifacts, and private imported backups must stay out of git.
 - Raw workbook parsing no longer ships in the main client bundle.
 - Local resolution files are an operator escape hatch for ambiguous rows, not the normal end-user workflow and not a replacement for conservative parser rules.
+- Healthy protection states are intentionally quiet in the UI; the full attention panel is reserved for clearly actionable states such as a stale exported backup.
 - The next recommended product step is to run a larger private workbook migration with the current direct `.ods` import workflow when the next workbook is available.

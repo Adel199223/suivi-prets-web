@@ -1,6 +1,6 @@
 {
   "version": "workbook-import-preview-v1",
-  "generatedAt": "2026-03-21T01:25:31.966340Z",
+  "generatedAt": "2026-03-21T10:36:50.255468Z",
   "preview": {
     "fileName": "continuation-workbook.ods",
     "fingerprint": "787f812aa47f1ad343f85466c1dc49ed4e28a8d7610fc912a98d8b989c1893ea",
@@ -117,18 +117,30 @@
         "signature": "adel|adel:suite|advance|20000|2024-01||troisieme virement"
       }
     ],
-    "issues": [
+    "unresolvedEntries": [
       {
+        "debtSourceKey": "adel:inconnue",
+        "borrowerSourceKey": "adel",
+        "borrowerName": "Adel",
+        "debtLabel": "Inconnue",
+        "amountCents": 125000,
+        "occurredOn": null,
+        "description": "Virement(s)",
+        "sourceRef": "dette_adel_inconnue:2",
         "sheetName": "dette_adel_inconnue",
         "rowNumber": 2,
-        "code": "missing_period",
-        "message": "Impossible de deduire la periode de cette ligne detaillee."
+        "kind": "opening_balance",
+        "reasonCode": "missing_period",
+        "reasonMessage": "Impossible de deduire la periode de cette ligne detaillee.",
+        "signature": "adel|adel:inconnue|opening_balance|125000||virement(s)|dette_adel_inconnue:2"
       }
     ],
+    "issues": [],
     "summary": {
       "debtCount": 2,
       "borrowerCount": 1,
       "entryCount": 3,
+      "unresolvedCount": 1,
       "paymentCount": 0,
       "advanceCount": 3,
       "outstandingImportedCents": 320000

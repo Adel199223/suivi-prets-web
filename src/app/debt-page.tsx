@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+import { useState } from 'react'
 import { EntryComposer } from '../components/EntryComposer'
 import { MetricCard } from '../components/MetricCard'
 import { describeEntryKind, formatDate, formatMoney } from '../domain/format'
@@ -11,6 +13,8 @@ interface DebtPageProps {
 }
 
 export function DebtPage({ debtView, onAddEntry, onToggleDebtClosed, onUpdateDebtNotes }: DebtPageProps) {
+  const [composer, setComposer] = useState<'payment' | 'advance' | null>(null)
+
   return (
     <div className="page-stack">
       <section className="hero-panel">
@@ -28,6 +32,43 @@ export function DebtPage({ debtView, onAddEntry, onToggleDebtClosed, onUpdateDeb
         </div>
       </section>
 
+      {debtView.unresolvedImportCount > 0 ? (
+        <section className="section-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Import partiel</p>
+              <h2>Lignes en attente pour cette dette</h2>
+            </div>
+            <Link className="inline-link" to="/import">
+              Completer depuis Import & sauvegarde
+            </Link>
+          </div>
+          <div className="notice-panel notice-panel-warning notice-panel-compact">
+            <strong>{debtView.unresolvedImportCount} ligne(s) attendent encore leur mois pour cette dette.</strong>
+            <p className="section-note">
+              Solde deja utilisable maintenant: <strong>{formatMoney(debtView.outstandingCents)}</strong>. Montant encore hors
+              solde: <strong>{formatMoney(debtView.pendingImportedCents)}</strong>.
+            </p>
+          </div>
+          <details className="details-disclosure">
+            <summary>Voir la ligne en attente</summary>
+            <div className="list-stack">
+              {debtView.pendingImports.map((item) => (
+                <article className="resolution-row" key={item.id}>
+                  <div>
+                    <strong>
+                      {formatMoney(item.amountCents)} · {item.sheetName} · ligne {item.rowNumber}
+                    </strong>
+                    <p>{item.reasonMessage}</p>
+                    <p>Fichier source: {item.fileName}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </details>
+        </section>
+      ) : null}
+
       <div className="split-grid">
         <section className="section-card">
           <div className="section-heading">
@@ -39,20 +80,34 @@ export function DebtPage({ debtView, onAddEntry, onToggleDebtClosed, onUpdateDeb
               {debtView.debt.status === 'open' ? 'Clore la dette' : 'Rouvrir la dette'}
             </button>
           </div>
-          <div className="dual-stack">
+          <div className="button-row">
+            <button type="button" onClick={() => setComposer((current) => (current === 'payment' ? null : 'payment'))}>
+              {composer === 'payment' ? 'Masquer le paiement' : 'Enregistrer un paiement'}
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setComposer((current) => (current === 'advance' ? null : 'advance'))}
+            >
+              {composer === 'advance' ? 'Masquer l’avance' : 'Ajouter une avance'}
+            </button>
+          </div>
+          {composer === 'payment' ? (
             <EntryComposer
               title="Enregistrer un paiement"
               submitLabel="Valider le paiement"
               kind="payment"
               onSubmit={(input) => onAddEntry(debtView.debt.id, input)}
             />
+          ) : null}
+          {composer === 'advance' ? (
             <EntryComposer
               title="Ajouter une avance"
               submitLabel="Valider l’avance"
               kind="advance"
               onSubmit={(input) => onAddEntry(debtView.debt.id, input)}
             />
-          </div>
+          ) : null}
         </section>
 
         <section className="section-card">
@@ -83,20 +138,29 @@ export function DebtPage({ debtView, onAddEntry, onToggleDebtClosed, onUpdateDeb
             </div>
           </div>
           <div className="table-stack">
-            <div className="table-row table-row-data table-head">
-              <span>Type</span>
-              <span>Date</span>
-              <span>Periode</span>
-              <span>Montant</span>
-            </div>
-            {debtView.entries.map((entry) => (
-              <div className="table-row table-row-data" key={entry.id}>
-                <span className="table-cell" data-label="Type">{describeEntryKind(entry.kind)}</span>
-                <span className="table-cell" data-label="Date">{formatDate(entry.occurredOn)}</span>
-                <span className="table-cell" data-label="Periode">{entry.periodKey}</span>
-                <span className="table-cell" data-label="Montant">{formatMoney(entry.amountCents)}</span>
+            {debtView.entries.length === 0 ? (
+              <div className="notice-panel notice-panel-empty notice-panel-compact">
+                <strong>Aucune ecriture comptabilisee pour le moment.</strong>
+                <p className="section-note">Les lignes valides apparaitront ici des qu’un paiement, une avance ou une ouverture sera enregistree.</p>
               </div>
-            ))}
+            ) : (
+              <>
+                <div className="table-row table-row-data table-head">
+                  <span>Type</span>
+                  <span>Date</span>
+                  <span>Periode</span>
+                  <span>Montant</span>
+                </div>
+                {debtView.entries.map((entry) => (
+                  <div className="table-row table-row-data" key={entry.id}>
+                    <span className="table-cell" data-label="Type">{describeEntryKind(entry.kind)}</span>
+                    <span className="table-cell" data-label="Date">{formatDate(entry.occurredOn)}</span>
+                    <span className="table-cell" data-label="Periode">{entry.periodKey}</span>
+                    <span className="table-cell" data-label="Montant">{formatMoney(entry.amountCents)}</span>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         </section>
 
@@ -108,20 +172,29 @@ export function DebtPage({ debtView, onAddEntry, onToggleDebtClosed, onUpdateDeb
             </div>
           </div>
           <div className="table-stack">
-            <div className="table-row table-row-data table-head">
-              <span>Annee</span>
-              <span>Prete</span>
-              <span>Paye</span>
-              <span>Net</span>
-            </div>
-            {debtView.annualSummaries.map((summary) => (
-              <div className="table-row table-row-data" key={summary.year}>
-                <span className="table-cell" data-label="Annee">{summary.year}</span>
-                <span className="table-cell" data-label="Prete">{formatMoney(summary.lentCents)}</span>
-                <span className="table-cell" data-label="Paye">{formatMoney(summary.paidCents)}</span>
-                <span className="table-cell" data-label="Net">{formatMoney(summary.netChangeCents)}</span>
+            {debtView.annualSummaries.length === 0 ? (
+              <div className="notice-panel notice-panel-empty notice-panel-compact">
+                <strong>Aucune synthese annuelle pour l’instant.</strong>
+                <p className="section-note">Cette vue se remplira automatiquement des qu’au moins une ligne sure sera comptabilisee.</p>
               </div>
-            ))}
+            ) : (
+              <>
+                <div className="table-row table-row-data table-head">
+                  <span>Annee</span>
+                  <span>Prete</span>
+                  <span>Paye</span>
+                  <span>Net</span>
+                </div>
+                {debtView.annualSummaries.map((summary) => (
+                  <div className="table-row table-row-data" key={summary.year}>
+                    <span className="table-cell" data-label="Annee">{summary.year}</span>
+                    <span className="table-cell" data-label="Prete">{formatMoney(summary.lentCents)}</span>
+                    <span className="table-cell" data-label="Paye">{formatMoney(summary.paidCents)}</span>
+                    <span className="table-cell" data-label="Net">{formatMoney(summary.netChangeCents)}</span>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         </section>
       </div>

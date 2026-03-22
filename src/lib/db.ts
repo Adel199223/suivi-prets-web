@@ -4,7 +4,8 @@ import type {
   DebtRecord,
   ImportSessionRecord,
   LedgerEntryRecord,
-  MetaRecord
+  MetaRecord,
+  UnresolvedImportRecord
 } from '../domain/types'
 
 class SuiviPretsDb extends Dexie {
@@ -12,6 +13,7 @@ class SuiviPretsDb extends Dexie {
   debts!: Table<DebtRecord, string>
   entries!: Table<LedgerEntryRecord, string>
   imports!: Table<ImportSessionRecord, string>
+  unresolvedImports!: Table<UnresolvedImportRecord, string>
   meta!: Table<MetaRecord, string>
 
   constructor() {
@@ -22,6 +24,15 @@ class SuiviPretsDb extends Dexie {
       debts: 'id, borrowerId, sourceKey, status, updatedAt',
       entries: 'id, debtId, kind, periodKey, occurredOn, &signature',
       imports: 'id, createdAt, fingerprint',
+      meta: 'key'
+    })
+
+    this.version(2).stores({
+      borrowers: 'id, sourceKey, updatedAt',
+      debts: 'id, borrowerId, sourceKey, status, updatedAt',
+      entries: 'id, debtId, kind, periodKey, occurredOn, &signature',
+      imports: 'id, createdAt, fingerprint',
+      unresolvedImports: 'id, debtId, borrowerId, debtSourceKey, borrowerSourceKey, fingerprint, resolvedAt, updatedAt, &signature',
       meta: 'key'
     })
   }

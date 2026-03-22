@@ -1,32 +1,49 @@
-import type { AppBackupV1 } from '../domain/types'
+import type { AppBackup, AppBackupV2 } from '../domain/types'
 
-export function serializeBackup(backup: AppBackupV1): string {
+function normalizeBackup(backup: AppBackup): AppBackupV2 {
+  if (backup.version === 'app-backup-v2') {
+    return backup
+  }
+
+  return {
+    ...backup,
+    version: 'app-backup-v2',
+    unresolvedImports: []
+  }
+}
+
+export function serializeBackup(backup: AppBackup): string {
   return JSON.stringify(backup, null, 2)
 }
 
-export function summarizeBackup(backup: AppBackupV1): {
+export function summarizeBackup(backup: AppBackup): {
   exportedAt: string
   borrowerCount: number
   debtCount: number
   entryCount: number
   importCount: number
+  unresolvedImportCount: number
 } {
+  const normalized = normalizeBackup(backup)
+
   return {
-    exportedAt: backup.exportedAt,
-    borrowerCount: backup.borrowers.length,
-    debtCount: backup.debts.length,
-    entryCount: backup.entries.length,
-    importCount: backup.imports.length
+    exportedAt: normalized.exportedAt,
+    borrowerCount: normalized.borrowers.length,
+    debtCount: normalized.debts.length,
+    entryCount: normalized.entries.length,
+    importCount: normalized.imports.length,
+    unresolvedImportCount: normalized.unresolvedImports.filter((record) => record.resolvedAt === null).length
   }
 }
 
-export async function parseBackupFile(file: File): Promise<AppBackupV1> {
+export async function parseBackupFile(file: File): Promise<AppBackupV2> {
   const text = await file.text()
-  const parsed = JSON.parse(text) as AppBackupV1
-  if (parsed.version !== 'app-backup-v1') {
+  const parsed = JSON.parse(text) as AppBackup
+  if (parsed.version !== 'app-backup-v1' && parsed.version !== 'app-backup-v2') {
     throw new Error('Version de sauvegarde non prise en charge.')
   }
-  return parsed
+
+  return normalizeBackup(parsed)
 }
 
 export function downloadJson(filename: string, content: string): void {

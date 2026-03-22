@@ -19,7 +19,7 @@
 ## Stage 4
 
 - Harden backups, storage persistence guidance, and operator comfort
-- Finish docs sync and responsive polish
+- Finish docs sync, responsive polish, and the calmer dashboard/import UX pass
 
 ## Immediate Priorities
 
@@ -30,4 +30,4 @@
 
 ## Next Session Anchor
 
-Continue from `ROADMAP.md` in `/home/fa507/dev/suivi-prets-web`. Direct in-app `.ods` import with deterministic preview and same-session merge is now implemented, the direct `xlsx` dependency has been removed, workbook parsing is lazy-loaded outside the main chunk, the first private four-debt import has been replayed locally with a fingerprint-guarded manual resolution and exported as a fresh private backup artifact, backup freshness plus restore confirmation are in place, and responsive polish has landed across the main surfaces. The next recommended step is to attempt the first larger private workbook migration when the next workbook is available.
+Continue from `ROADMAP.md` in `/home/fa507/dev/suivi-prets-web`. Direct in-app `.ods` import with deterministic preview and same-session merge is now implemented, the direct `xlsx` dependency has been removed, workbook parsing is lazy-loaded outside the main chunk, partial import plus unresolved local queue are in place, the app now treats local saves as automatic and keeps backup/export tools optional, and the dashboard / borrower / debt / import surfaces have been visually simplified around the real daily workflow. The next recommended step is to attempt the first larger private workbook migration when the next workbook is available.

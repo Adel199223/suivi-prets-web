@@ -268,7 +268,33 @@ def create_signature(candidate: dict[str, Any]) -> str:
     )
 
 
+def create_unresolved_signature(candidate: dict[str, Any]) -> str:
+    description = normalize_whitespace(str(candidate["description"])).lower()
+    return "|".join(
+        [
+            str(candidate["borrowerSourceKey"]),
+            str(candidate["debtSourceKey"]),
+            str(candidate["kind"]),
+            str(candidate["amountCents"]),
+            str(candidate.get("occurredOn") or ""),
+            description,
+            str(candidate["sourceRef"]),
+        ]
+    )
+
+
 def dedupe_by_signature(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    output: list[dict[str, Any]] = []
+    for entry in entries:
+        if entry["signature"] in seen:
+            continue
+        seen.add(entry["signature"])
+        output.append(entry)
+    return output
+
+
+def dedupe_unresolved_by_signature(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     seen: set[str] = set()
     output: list[dict[str, Any]] = []
     for entry in entries:
@@ -363,7 +389,7 @@ def parse_sheet(
     rows: list[list[str]],
     resolutions: dict[tuple[str, int], dict[str, Any]],
     applied_resolution_keys: set[tuple[str, int]],
-) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+) -> tuple[dict[str, Any] | None, list[dict[str, Any]], list[dict[str, Any]]]:
     if not RELEVANT_PREFIX.search(sheet_name):
         return (
             None,
@@ -375,6 +401,7 @@ def parse_sheet(
                     "message": "Feuille ignoree car elle ne suit pas la famille de workbook attendue.",
                 }
             ],
+            [],
         )
 
     borrower_source_key, debt_source_key, debt_label = parse_borrower_and_debt(sheet_name)
@@ -382,7 +409,9 @@ def parse_sheet(
     issues: list[dict[str, Any]] = []
     detail_entries: list[dict[str, Any]] = []
     summary_fallback_entries: list[dict[str, Any]] = []
+    unresolved_entries: list[dict[str, Any]] = []
     last_resolved_period_key: str | None = None
+    negative_counter = 0
 
     for index, row in enumerate(rows):
         if is_annual_row(row):
@@ -419,13 +448,32 @@ def parse_sheet(
             continue
 
         if detail_amount_cents not in (None, 0):
+            kind = "payment" if detail_amount_cents > 0 else infer_negative_kind(negative_counter)
+            if detail_amount_cents <= 0:
+                negative_counter += 1
+
+            if not period_key and resolution is not None:
+                period_key = resolution["periodKey"]
+                occurred_on = resolution["occurredOn"]
+                detail_text = append_manual_resolution_note(detail_text, period_key)
+                applied_resolution_keys.add((sheet_name, row_number))
+
             if not period_key:
-                issues.append(
+                unresolved_entries.append(
                     {
+                        "debtSourceKey": debt_source_key,
+                        "borrowerSourceKey": borrower_source_key,
+                        "borrowerName": borrower_name,
+                        "debtLabel": debt_label,
+                        "amountCents": abs(detail_amount_cents),
+                        "occurredOn": occurred_on,
+                        "description": normalize_whitespace(detail_text) or "Import detail",
+                        "sourceRef": f"{sheet_name}:{row_number}",
                         "sheetName": sheet_name,
                         "rowNumber": row_number,
-                        "code": "missing_period",
-                        "message": "Impossible de deduire la periode de cette ligne detaillee.",
+                        "kind": kind,
+                        "reasonCode": "missing_period",
+                        "reasonMessage": "Impossible de deduire la periode de cette ligne detaillee.",
                     }
                 )
             else:
@@ -442,18 +490,49 @@ def parse_sheet(
                         "sourceRef": f"{sheet_name}:{row_number}",
                         "sheetName": sheet_name,
                         "rowNumber": row_number,
+                        "kind": kind,
                     }
                 )
                 last_resolved_period_key = period_key
+            continue
 
         if detail_amount_cents in (None, 0) and not summary_period_key:
-            if (payment_cents is not None and payment_cents > 0) or (lent_cents is not None and lent_cents < 0):
-                issues.append(
+            if payment_cents is not None and payment_cents > 0:
+                unresolved_entries.append(
                     {
+                        "debtSourceKey": debt_source_key,
+                        "borrowerSourceKey": borrower_source_key,
+                        "borrowerName": borrower_name,
+                        "debtLabel": debt_label,
+                        "amountCents": payment_cents,
+                        "occurredOn": occurred_on,
+                        "description": normalize_whitespace(detail_text) or "Paiement importe",
+                        "sourceRef": f"{sheet_name}:{row_number}:summary-payment",
                         "sheetName": sheet_name,
                         "rowNumber": row_number,
-                        "code": "missing_period",
-                        "message": "Une valeur de resume existe sans periode exploitable.",
+                        "kind": "payment",
+                        "reasonCode": "missing_period",
+                        "reasonMessage": "Une valeur de resume existe sans periode exploitable.",
+                    }
+                )
+            if lent_cents is not None and lent_cents < 0:
+                kind = infer_negative_kind(negative_counter)
+                negative_counter += 1
+                unresolved_entries.append(
+                    {
+                        "debtSourceKey": debt_source_key,
+                        "borrowerSourceKey": borrower_source_key,
+                        "borrowerName": borrower_name,
+                        "debtLabel": debt_label,
+                        "amountCents": abs(lent_cents),
+                        "occurredOn": occurred_on,
+                        "description": normalize_whitespace(detail_text) or "Avance importee",
+                        "sourceRef": f"{sheet_name}:{row_number}:summary-lent",
+                        "sheetName": sheet_name,
+                        "rowNumber": row_number,
+                        "kind": kind,
+                        "reasonCode": "missing_period",
+                        "reasonMessage": "Une valeur de resume existe sans periode exploitable.",
                     }
                 )
             continue
@@ -493,17 +572,12 @@ def parse_sheet(
                     "_fallbackKind": "negative",
                 }
             )
+            negative_counter += 1
             last_resolved_period_key = summary_period_key
 
-    negative_counter = 0
     detail_typed: list[dict[str, Any]] = []
     for entry in detail_entries:
-        row = rows[entry["rowNumber"] - 1]
-        source_amount = cents_from_cell(row[8] if len(row) > 8 else "") or 0
-        kind = "payment" if source_amount > 0 else infer_negative_kind(negative_counter)
-        if source_amount <= 0:
-            negative_counter += 1
-        typed = {**entry, "kind": kind}
+        typed = dict(entry)
         typed["signature"] = create_signature(typed)
         detail_typed.append(typed)
 
@@ -529,6 +603,15 @@ def parse_sheet(
             fallback_typed.append(typed)
 
     entries = dedupe_by_signature(detail_typed + fallback_typed)
+    unresolved_entries = dedupe_unresolved_by_signature(
+        [
+            {
+                **entry,
+                "signature": create_unresolved_signature(entry),
+            }
+            for entry in unresolved_entries
+        ]
+    )
     debt = {
         "sourceKey": debt_source_key,
         "borrowerSourceKey": borrower_source_key,
@@ -539,7 +622,7 @@ def parse_sheet(
         "entries": entries,
     }
 
-    return (debt, issues)
+    return (debt, issues, unresolved_entries)
 
 
 def build_preview(input_path: Path, resolutions_path: Path | None = None) -> dict[str, Any]:
@@ -548,13 +631,15 @@ def build_preview(input_path: Path, resolutions_path: Path | None = None) -> dic
     resolutions = load_resolutions(resolutions_path, workbook_fingerprint)
     debts: list[dict[str, Any]] = []
     issues: list[dict[str, Any]] = []
+    unresolved_entries: list[dict[str, Any]] = []
     applied_resolution_keys: set[tuple[str, int]] = set()
 
     for sheet_name, rows in workbook.items():
-        debt, sheet_issues = parse_sheet(sheet_name, rows, resolutions, applied_resolution_keys)
+        debt, sheet_issues, sheet_unresolved_entries = parse_sheet(sheet_name, rows, resolutions, applied_resolution_keys)
         if debt is not None:
             debts.append(debt)
         issues.extend(sheet_issues)
+        unresolved_entries.extend(sheet_unresolved_entries)
 
     unused_resolution_keys = sorted(set(resolutions.keys()) - applied_resolution_keys)
     if unused_resolution_keys:
@@ -562,11 +647,13 @@ def build_preview(input_path: Path, resolutions_path: Path | None = None) -> dic
         raise ValueError(f"Resolution entries were not applied: {unresolved}")
 
     entries = [entry for debt in debts for entry in debt["entries"]]
+    unresolved_entries = dedupe_unresolved_by_signature(unresolved_entries)
     borrower_count = len({debt["borrowerSourceKey"] for debt in debts})
     summary = {
         "debtCount": len(debts),
         "borrowerCount": borrower_count,
         "entryCount": len(entries),
+        "unresolvedCount": len(unresolved_entries),
         "paymentCount": len([entry for entry in entries if entry["kind"] == "payment"]),
         "advanceCount": len([entry for entry in entries if entry["kind"] not in ("payment", "adjustment")]),
         "outstandingImportedCents": sum(
@@ -579,6 +666,7 @@ def build_preview(input_path: Path, resolutions_path: Path | None = None) -> dic
         "fingerprint": workbook_fingerprint,
         "debts": debts,
         "entries": entries,
+        "unresolvedEntries": unresolved_entries,
         "issues": issues,
         "summary": summary,
     }

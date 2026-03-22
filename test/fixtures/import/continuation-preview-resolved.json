@@ -1,6 +1,6 @@
 {
   "version": "workbook-import-preview-v1",
-  "generatedAt": "2026-03-21T01:35:32.786078Z",
+  "generatedAt": "2026-03-21T10:36:50.548617Z",
   "preview": {
     "fileName": "continuation-workbook.ods",
     "fingerprint": "787f812aa47f1ad343f85466c1dc49ed4e28a8d7610fc912a98d8b989c1893ea",
@@ -148,11 +148,13 @@
         "signature": "adel|adel:inconnue|opening_balance|125000|2021-01||virement(s) [periode resolue manuellement: 2021-01]"
       }
     ],
+    "unresolvedEntries": [],
     "issues": [],
     "summary": {
       "debtCount": 2,
       "borrowerCount": 1,
       "entryCount": 4,
+      "unresolvedCount": 0,
       "paymentCount": 0,
       "advanceCount": 4,
       "outstandingImportedCents": 445000

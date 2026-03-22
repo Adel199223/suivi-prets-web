@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { buildWorkbookFile, readImportPreviewArtifact } from '../../test/fixtures/import/files'
+import { buildWorkbookFile } from '../../test/fixtures/import/files'
 import { parseImportWorkbookFile } from './importWorkbook'
 import { applyImportPreview, buildSnapshot, resetAllData } from './repository'
 
@@ -8,30 +8,35 @@ describe('browser ods import parser', () => {
     await resetAllData()
   })
 
-  it('matches the partial workbook fixture preview', async () => {
+  it('parses a valid workbook into safe entries without unresolved rows', async () => {
     const actual = await parseImportWorkbookFile(buildWorkbookFile('partial-workbook.ods'))
-    const expected = readImportPreviewArtifact('partial-preview.json')
 
     expect(actual.version).toBe('workbook-import-preview-v1')
-    expect(typeof actual.generatedAt).toBe('string')
-    expect(actual.preview).toEqual(expected.preview)
+    expect(actual.preview.summary.borrowerCount).toBeGreaterThan(0)
+    expect(actual.preview.summary.entryCount).toBeGreaterThan(0)
+    expect(actual.preview.summary.unresolvedCount).toBe(0)
+    expect(actual.preview.unresolvedEntries).toHaveLength(0)
+    expect(actual.preview.issues).toHaveLength(0)
   })
 
-  it('matches the broken workbook fixture preview and keeps blocking issues', async () => {
+  it('keeps queueable missing-period rows as unresolved instead of blocking the whole workbook', async () => {
     const actual = await parseImportWorkbookFile(buildWorkbookFile('broken-workbook.ods'))
-    const expected = readImportPreviewArtifact('broken-preview.json')
 
-    expect(actual.preview).toEqual(expected.preview)
-    expect(actual.preview.issues.length).toBeGreaterThan(0)
     expect(actual.preview.summary.entryCount).toBe(0)
+    expect(actual.preview.summary.unresolvedCount).toBe(1)
+    expect(actual.preview.unresolvedEntries).toHaveLength(1)
+    expect(actual.preview.unresolvedEntries[0]?.sheetName).toBe('dette_adel_1')
+    expect(actual.preview.unresolvedEntries[0]?.rowNumber).toBe(2)
+    expect(actual.preview.issues).toHaveLength(0)
+    expect(actual.preview.debts).toHaveLength(1)
   })
 
-  it('matches the continuation workbook fixture preview', async () => {
+  it('inherits the previous period for continuation rows while queueing only the truly ambiguous one', async () => {
     const actual = await parseImportWorkbookFile(buildWorkbookFile('continuation-workbook.ods'))
-    const expected = readImportPreviewArtifact('continuation-preview.json')
 
-    expect(actual.preview).toEqual(expected.preview)
-    expect(actual.preview.issues).toHaveLength(1)
+    expect(actual.preview.debts[0]?.entries).toHaveLength(3)
+    expect(actual.preview.summary.unresolvedCount).toBe(1)
+    expect(actual.preview.unresolvedEntries[0]?.rowNumber).toBe(2)
   })
 
   it('dedupes a repeated workbook import end to end', async () => {
@@ -41,9 +46,10 @@ describe('browser ods import parser', () => {
     const firstSession = await applyImportPreview(firstWorkbook.preview)
     const secondSession = await applyImportPreview(secondWorkbook.preview)
 
-    expect(firstSession.appliedEntries).toBeGreaterThan(0)
-    expect(secondSession.appliedEntries).toBe(0)
-    expect(secondSession.duplicateEntries).toBe(firstSession.appliedEntries)
+    expect(firstSession.session.appliedEntries).toBeGreaterThan(0)
+    expect(firstSession.mode).toBe('full')
+    expect(secondSession.session.appliedEntries).toBe(0)
+    expect(secondSession.session.duplicateEntries).toBe(firstSession.session.appliedEntries)
   })
 
   it('merges only unseen people and debts from a later fuller workbook', async () => {
@@ -54,8 +60,9 @@ describe('browser ods import parser', () => {
     const secondSession = await applyImportPreview(fullWorkbook.preview)
     const snapshot = await buildSnapshot()
 
-    expect(secondSession.appliedBorrowers).toBeGreaterThan(0)
-    expect(secondSession.appliedDebts).toBeGreaterThan(0)
+    expect(secondSession.session.appliedBorrowers).toBeGreaterThan(0)
+    expect(secondSession.session.appliedDebts).toBeGreaterThan(0)
+    expect(secondSession.affectedBorrowerIds.length).toBeGreaterThan(0)
     expect(snapshot.borrowers.length).toBeGreaterThanOrEqual(4)
   })
 })

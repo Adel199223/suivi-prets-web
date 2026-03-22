@@ -21,3 +21,11 @@ export function getBlockingImportIssues(input: ImportIssuesInput): ImportIssue[]
 export function getInformationalImportIssues(input: ImportIssuesInput): ImportIssue[] {
   return resolveIssues(input).filter((issue) => issue.code === 'ignored_sheet')
 }
+
+export function isInAppResolvableImportIssue(issue: ImportIssue): boolean {
+  return issue.code === 'missing_period'
+}
+
+export function buildImportIssueResolutionKey(issue: Pick<ImportIssue, 'sheetName' | 'rowNumber'>): string {
+  return `${issue.sheetName}:${issue.rowNumber}`
+}
