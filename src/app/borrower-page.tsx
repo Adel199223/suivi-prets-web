@@ -17,11 +17,67 @@ interface BorrowerPageProps {
   }) => Promise<void>
   onAddEntry: (debtId: string, input: { kind: EntryKind; amountCents: number; occurredOn: string | null; description: string }) => Promise<void>
   onToggleDebtClosed: (debtId: string, closed: boolean) => Promise<void>
-  onUpdateBorrowerNotes: (borrowerId: string, notes: string) => Promise<void>
+  onUpdateBorrower: (borrowerId: string, input: { name: string; notes: string }) => Promise<void>
   pendingResolutionDrafts: Record<string, string>
   pendingResolutionErrors: Record<string, string>
   onChangePendingResolution: (unresolvedImportId: string, periodKey: string) => void
   onResolvePendingImport: (unresolvedImportId: string) => Promise<void>
+  onDeletePendingImport: (unresolvedImportId: string) => Promise<void>
+  onDeleteBorrower: (borrowerId: string) => Promise<void>
+}
+
+function BorrowerProfileForm({
+  borrowerId,
+  initialName,
+  initialNotes,
+  onUpdateBorrower,
+}: {
+  borrowerId: string
+  initialName: string
+  initialNotes: string
+  onUpdateBorrower: BorrowerPageProps['onUpdateBorrower']
+}) {
+  const [borrowerName, setBorrowerName] = useState(initialName)
+  const [borrowerNotes, setBorrowerNotes] = useState(initialNotes)
+  const [profileError, setProfileError] = useState<string | null>(null)
+
+  async function handleSaveBorrower(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!borrowerName.trim()) {
+      setProfileError('Ajoutez un nom d’emprunteur.')
+      return
+    }
+
+    setProfileError(null)
+    await onUpdateBorrower(borrowerId, {
+      name: borrowerName,
+      notes: borrowerNotes,
+    })
+  }
+
+  return (
+    <form className="list-stack" onSubmit={handleSaveBorrower}>
+      <label>
+        Nom
+        <input
+          aria-label="Nom emprunteur"
+          value={borrowerName}
+          onChange={(event) => setBorrowerName(event.target.value)}
+        />
+      </label>
+      <label>
+        Notes
+        <textarea
+          aria-label="Notes emprunteur"
+          className="notes-area notes-area-compact"
+          value={borrowerNotes}
+          onChange={(event) => setBorrowerNotes(event.target.value)}
+        />
+      </label>
+      {profileError ? <p className="inline-error">{profileError}</p> : null}
+      <button type="submit">Enregistrer la fiche</button>
+    </form>
+  )
 }
 
 function DebtCard({
@@ -102,28 +158,28 @@ export function BorrowerPage({
   onCreateDebt,
   onAddEntry,
   onToggleDebtClosed,
-  onUpdateBorrowerNotes,
+  onUpdateBorrower,
   pendingResolutionDrafts,
   pendingResolutionErrors,
   onChangePendingResolution,
-  onResolvePendingImport
+  onResolvePendingImport,
+  onDeletePendingImport,
+  onDeleteBorrower
 }: BorrowerPageProps) {
   const [label, setLabel] = useState('')
   const [openingBalance, setOpeningBalance] = useState('')
   const [occurredOn, setOccurredOn] = useState('')
   const [notes, setNotes] = useState('')
-  const [borrowerNotes, setBorrowerNotes] = useState(borrowerView.borrower.notes)
-  const [showBorrowerNotesEditor, setShowBorrowerNotesEditor] = useState(Boolean(borrowerView.borrower.notes.trim()))
-  const [error, setError] = useState<string | null>(null)
+  const [createDebtError, setCreateDebtError] = useState<string | null>(null)
 
   async function handleCreateDebt(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!label.trim()) {
-      setError('Ajoutez un libelle de dette.')
+      setCreateDebtError('Ajoutez un libelle de dette.')
       return
     }
 
-    setError(null)
+    setCreateDebtError(null)
     await onCreateDebt({
       borrowerId: borrowerView.borrower.id,
       label,
@@ -156,28 +212,16 @@ export function BorrowerPage({
         <div className="section-heading">
           <div>
             <p className="eyebrow">Fiche emprunteur</p>
-            <h2>Notes</h2>
+            <h2>Informations emprunteur</h2>
           </div>
-          {showBorrowerNotesEditor ? (
-            <button type="button" onClick={() => onUpdateBorrowerNotes(borrowerView.borrower.id, borrowerNotes)}>
-              Enregistrer les notes
-            </button>
-          ) : (
-            <button type="button" className="ghost-button" onClick={() => setShowBorrowerNotesEditor(true)}>
-              Ajouter des notes
-            </button>
-          )}
         </div>
-        {showBorrowerNotesEditor ? (
-          <textarea
-            aria-label="Notes emprunteur"
-            className="notes-area notes-area-compact"
-            value={borrowerNotes}
-            onChange={(event) => setBorrowerNotes(event.target.value)}
-          />
-        ) : (
-          <p className="empty-state">Aucune note pour le moment.</p>
-        )}
+        <BorrowerProfileForm
+          key={`${borrowerView.borrower.updatedAt}:${borrowerView.borrower.name}`}
+          borrowerId={borrowerView.borrower.id}
+          initialName={borrowerView.borrower.name}
+          initialNotes={borrowerView.borrower.notes}
+          onUpdateBorrower={onUpdateBorrower}
+        />
       </section>
 
       {borrowerView.unresolvedImportCount > 0 ? (
@@ -209,6 +253,7 @@ export function BorrowerPage({
                   error={pendingResolutionErrors[item.id] ?? null}
                   onChangePeriodKey={onChangePendingResolution}
                   onResolve={onResolvePendingImport}
+                  onDelete={onDeletePendingImport}
                   showFileName
                 />
               ))}
@@ -248,7 +293,7 @@ export function BorrowerPage({
           </label>
           <button type="submit">Creer la dette</button>
         </form>
-        {error ? <p className="inline-error">{error}</p> : null}
+        {createDebtError ? <p className="inline-error">{createDebtError}</p> : null}
       </section>
 
       <section className="section-card">
@@ -262,6 +307,28 @@ export function BorrowerPage({
           {borrowerView.debts.map((debtView) => (
             <DebtCard key={debtView.debt.id} debtView={debtView} onAddEntry={onAddEntry} onToggleDebtClosed={onToggleDebtClosed} />
           ))}
+        </div>
+      </section>
+
+      <section className="section-card section-card-compact">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Zone dangereuse</p>
+            <h2>Supprimer cet emprunteur</h2>
+          </div>
+        </div>
+        <div className="notice-panel notice-panel-warning action-panel">
+          <strong>Suppression definitive de cet emprunteur</strong>
+          <p className="section-note">
+            Toutes les dettes, ecritures et lignes d’import en attente liees a cet emprunteur seront aussi supprimees sur cet appareil.
+          </p>
+          <button
+            type="button"
+            className="ghost-button danger-button"
+            onClick={() => void onDeleteBorrower(borrowerView.borrower.id)}
+          >
+            Supprimer cet emprunteur
+          </button>
         </div>
       </section>
     </div>

@@ -21,6 +21,14 @@ interface ImportPageProps {
   importSessions: ImportSessionRecord[]
   lastBackupAt: string | null
   unresolvedImports: UnresolvedImportRecord[]
+  localDataSummary: {
+    borrowerCount: number
+    debtCount: number
+    entryCount: number
+    importCount: number
+    unresolvedCount: number
+    hasAnyData: boolean
+  }
   pendingResolutionDrafts: Record<string, string>
   pendingResolutionErrors: Record<string, string>
   rememberedImportResolutions: ImportIssueResolution[]
@@ -28,11 +36,13 @@ interface ImportPageProps {
   onSelectImportWorkbook: (file: File) => Promise<void>
   onChangePendingResolution: (unresolvedImportId: string, periodKey: string) => void
   onResolvePendingImport: (unresolvedImportId: string) => Promise<void>
+  onDeletePendingImport: (unresolvedImportId: string) => Promise<void>
   onForgetSavedImportResolutions: () => Promise<void>
   onApplyImport: () => Promise<void>
   onExportBackup: () => Promise<void>
   onRestoreBackup: (file: File) => Promise<void>
   onRequestPersistence: () => Promise<void>
+  onResetAllData: () => Promise<void>
 }
 
 interface PreviewBorrowerRow {
@@ -144,6 +154,7 @@ export function ImportPage({
   importSessions,
   lastBackupAt,
   unresolvedImports,
+  localDataSummary,
   pendingResolutionDrafts,
   pendingResolutionErrors,
   rememberedImportResolutions,
@@ -151,11 +162,13 @@ export function ImportPage({
   onSelectImportWorkbook,
   onChangePendingResolution,
   onResolvePendingImport,
+  onDeletePendingImport,
   onForgetSavedImportResolutions,
   onApplyImport,
   onExportBackup,
   onRestoreBackup,
-  onRequestPersistence
+  onRequestPersistence,
+  onResetAllData
 }: ImportPageProps) {
   const [showProtectionDetails, setShowProtectionDetails] = useState(false)
   const importPreview = importArtifact?.preview ?? null
@@ -500,6 +513,7 @@ export function ImportPage({
                 error={pendingResolutionErrors[item.id] ?? null}
                 onChangePeriodKey={onChangePendingResolution}
                 onResolve={onResolvePendingImport}
+                onDelete={onDeletePendingImport}
                 showFileName
               />
             ))
@@ -548,6 +562,35 @@ export function ImportPage({
             </p>
           </div>
         </details>
+      </section>
+
+      <section className="section-card section-card-compact">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Zone dangereuse</p>
+            <h2>Tout effacer sur cet appareil</h2>
+          </div>
+        </div>
+        <div className="notice-panel notice-panel-warning action-panel">
+          <strong>Effacement total local</strong>
+          <p className="section-note">
+            Cette action supprimera toutes les donnees locales de ce navigateur, y compris les emprunteurs, dettes, ecritures, lignes en attente, sessions d’import et meta locale.
+          </p>
+          <p className="section-note">
+            Etat actuel: {localDataSummary.borrowerCount} emprunteur(s), {localDataSummary.debtCount} dette(s), {localDataSummary.entryCount} ecriture(s), {localDataSummary.unresolvedCount} ligne(s) en attente, {localDataSummary.importCount} session(s) d’import.
+          </p>
+          <p className="section-note">
+            Exportez une copie de secours avant si vous voulez garder une copie portable de vos donnees avant effacement.
+          </p>
+          <button
+            type="button"
+            className="ghost-button danger-button"
+            disabled={!localDataSummary.hasAnyData}
+            onClick={() => void onResetAllData()}
+          >
+            {localDataSummary.hasAnyData ? 'Tout effacer sur cet appareil' : 'Aucune donnee locale a effacer'}
+          </button>
+        </div>
       </section>
 
       <section className="section-card section-card-compact">

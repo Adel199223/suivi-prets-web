@@ -7,6 +7,7 @@ interface PendingImportResolutionCardProps {
   error: string | null
   onChangePeriodKey: (unresolvedImportId: string, periodKey: string) => void
   onResolve: (unresolvedImportId: string) => Promise<void> | void
+  onDelete?: (unresolvedImportId: string) => Promise<void> | void
   showFileName?: boolean
 }
 
@@ -16,6 +17,7 @@ export function PendingImportResolutionCard({
   error,
   onChangePeriodKey,
   onResolve,
+  onDelete,
   showFileName = false
 }: PendingImportResolutionCardProps) {
   return (
@@ -41,9 +43,21 @@ export function PendingImportResolutionCard({
         />
       </label>
       {error ? <p className="inline-error">{error}</p> : null}
-      <button type="button" className="secondary-button" onClick={() => void onResolve(item.id)}>
-        Ajouter cette ligne a la dette
-      </button>
+      <div className="resolution-actions">
+        <button type="button" className="secondary-button" onClick={() => void onResolve(item.id)}>
+          Ajouter cette ligne a la dette
+        </button>
+        {onDelete ? (
+          <button
+            type="button"
+            className="ghost-button danger-button"
+            aria-label={`Supprimer la ligne ${item.sheetName} ligne ${item.rowNumber}`}
+            onClick={() => void onDelete(item.id)}
+          >
+            Supprimer cette ligne
+          </button>
+        ) : null}
+      </div>
     </article>
   )
 }

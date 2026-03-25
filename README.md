@@ -45,6 +45,28 @@ Commande ultra-courte :
 npm run start:windows
 ```
 
+### Arreter l'application (Windows)
+
+Fermer l'onglet du navigateur ne coupe pas le serveur local. Fermer la fenetre Git Bash ou PowerShell peut aussi laisser peu clair si l'app tourne encore.
+
+Commande recommandee :
+
+```powershell
+npm run stop:windows
+```
+
+Commande directe :
+
+```powershell
+.\scripts\stop-windows.ps1
+```
+
+Si l'app tourne sur un autre port :
+
+```powershell
+.\scripts\stop-windows.ps1 -Port 4174
+```
+
 ### Commandes WSL (optionnel)
 
 ```powershell

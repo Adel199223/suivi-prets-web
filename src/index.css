@@ -100,6 +100,14 @@ textarea {
   justify-content: flex-end;
 }
 
+.topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  justify-content: flex-end;
+  align-items: center;
+}
+
 .nav-tabs a {
   min-width: 0;
   padding: 0.75rem 1.1rem;
@@ -126,6 +134,11 @@ textarea {
   border-radius: 20px;
   background: rgba(216, 146, 76, 0.17);
   color: #5a3b0d;
+}
+
+.helper-panel {
+  width: min(1180px, 100%);
+  margin: 1rem auto 0;
 }
 
 .page-stack {
@@ -284,9 +297,16 @@ h4 {
 
 .table-row-data {
   display: grid;
-  grid-template-columns: minmax(120px, 1.3fr) repeat(3, minmax(0, 1fr));
   gap: 0.9rem;
   align-items: center;
+}
+
+.table-row-timeline {
+  grid-template-columns: minmax(120px, 1.1fr) minmax(160px, 1.5fr) repeat(3, minmax(0, 1fr)) auto;
+}
+
+.table-row-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .borrower-row:hover,
@@ -359,14 +379,43 @@ h4 {
   gap: 0.45rem;
 }
 
+.resolution-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .ghost-button {
   background: rgba(29, 46, 46, 0.09);
   color: #1d2e2e;
 }
 
+.danger-button {
+  background: rgba(138, 47, 33, 0.12);
+  color: #8a2f21;
+}
+
+.table-action-button {
+  width: 100%;
+}
+
+.table-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.table-action-group .table-action-button {
+  width: auto;
+}
+
 .ghost-button-inline {
   padding: 0.45rem 0.9rem;
   flex: 0 0 auto;
+}
+
+.topbar-helper-button {
+  white-space: nowrap;
 }
 
 .notes-area {
@@ -584,8 +633,16 @@ h4 {
     justify-content: stretch;
   }
 
+  .topbar-actions {
+    width: 100%;
+  }
+
   .nav-tabs a {
     flex: 1 1 160px;
+  }
+
+  .topbar-helper-button {
+    width: 100%;
   }
 
   .inline-form {

@@ -35,6 +35,7 @@ describe('App', () => {
     await resetAllData()
     vi.spyOn(backupModule, 'downloadJson').mockImplementation(() => {})
     vi.stubGlobal('confirm', vi.fn(() => true))
+    vi.stubGlobal('prompt', vi.fn(() => null))
   })
 
   afterEach(() => {
@@ -271,6 +272,94 @@ describe('App', () => {
     expect(persistMock).toHaveBeenCalledTimes(2)
   })
 
+  it('shows an honest local close helper in the topbar', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <App runtimeHostname="127.0.0.1" />
+      </MemoryRouter>
+    )
+
+    await user.click(screen.getByRole('button', { name: /comment fermer/i }))
+    await screen.findByText(/ctrl\+c/i)
+    expect(screen.getByText(/npm run stop:windows/i)).toBeInTheDocument()
+    expect(screen.getByText(/fermer seulement l’onglet du navigateur ne coupe pas le serveur local/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /masquer l’aide fermeture/i }))
+    await waitFor(() => {
+      expect(screen.queryByText(/npm run stop:windows/i)).not.toBeInTheDocument()
+    })
+  })
+
+  it('shows hosted close guidance instead of local stop commands outside localhost', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <App runtimeHostname="suivi-prets.app" />
+      </MemoryRouter>
+    )
+
+    await user.click(screen.getByRole('button', { name: /comment fermer/i }))
+    await screen.findByText(/fermez simplement l’onglet ou quittez le navigateur/i)
+    expect(screen.getByText(/serveur local/i)).toBeInTheDocument()
+    expect(screen.queryByText(/npm run stop:windows/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/ctrl\+c/i)).not.toBeInTheDocument()
+  })
+
+  it('edits borrower information and reflects the new name on the dashboard', async () => {
+    const borrower = await createBorrower({ name: 'Amina', notes: 'Note initiale' })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={[`/emprunteurs/${borrower.id}`]}>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByRole('heading', { name: 'Amina' })
+    await user.clear(screen.getByLabelText(/nom emprunteur/i))
+    await user.type(screen.getByLabelText(/nom emprunteur/i), 'Amina Corrigee')
+    await user.clear(screen.getByLabelText(/^Notes emprunteur$/i))
+    await user.type(screen.getByLabelText(/^Notes emprunteur$/i), 'Note corrigee')
+    await user.click(screen.getByRole('button', { name: /enregistrer la fiche/i }))
+
+    await screen.findByText(/fiche emprunteur enregistree/i)
+    await screen.findByRole('heading', { name: 'Amina Corrigee' })
+    await user.click(screen.getByRole('link', { name: /tableau de bord/i }))
+    await screen.findByText('Amina Corrigee')
+  })
+
+  it('edits debt information and offers a contextual link to add another debt', async () => {
+    const borrower = await createBorrower({ name: 'Amina' })
+    const debt = await createDebt({
+      borrowerId: borrower.id,
+      label: 'Loyer',
+      openingBalanceCents: 120000,
+      occurredOn: '2026-03-01'
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={[`/dettes/${debt.id}`]}>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByRole('heading', { name: 'Loyer' })
+    await user.clear(screen.getByLabelText(/libelle de la dette/i))
+    await user.type(screen.getByLabelText(/libelle de la dette/i), 'Loyer principal')
+    await user.clear(screen.getByLabelText(/^Notes de la dette$/i))
+    await user.type(screen.getByLabelText(/^Notes de la dette$/i), 'Dette corrigee')
+    await user.click(screen.getByRole('button', { name: /enregistrer les informations/i }))
+
+    await screen.findByText(/informations de la dette enregistrees/i)
+    await screen.findByRole('heading', { name: 'Loyer principal' })
+
+    await user.click(screen.getByRole('link', { name: /ajouter une autre dette pour cet emprunteur/i }))
+    await screen.findByRole('heading', { name: 'Amina' })
+    await screen.findByRole('heading', { name: /ajouter une dette/i })
+  })
+
   it('reuses a remembered correction on reimport after a queued line was resolved once', async () => {
     const user = userEvent.setup()
     render(
@@ -297,6 +386,183 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: /importer ce classeur/i }))
     await screen.findByText(/0 ligne\(s\) ajoutee\(s\), 1 deja presente\(s\)/i)
+  })
+
+  it('deletes a pending import row directly from the import queue', async () => {
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/import']}>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByRole('heading', { name: /protection des donnees/i })
+    await user.upload(screen.getByLabelText(/choisir un classeur \.ods/i), buildWorkbookFile('broken-workbook.ods'))
+    await user.click(await screen.findByRole('button', { name: /importer les lignes sures maintenant/i }))
+    await user.click((await screen.findAllByRole('link', { name: /completer la file d’attente/i }))[0]!)
+    await screen.findByRole('heading', { name: /lignes en attente/i })
+    await screen.findByText(/dette_adel_1 · ligne 2/i)
+
+    await user.click(screen.getByRole('button', { name: /supprimer la ligne dette_adel_1 ligne 2/i }))
+    expect(window.confirm).toHaveBeenCalled()
+    expect(String(vi.mocked(window.confirm).mock.calls.at(-1)?.[0])).toContain('Supprimer cette ligne en attente')
+    await screen.findByText(/ligne en attente supprimee/i)
+    await waitFor(() => {
+      expect(screen.queryByText(/dette_adel_1 · ligne 2/i)).not.toBeInTheDocument()
+    })
+  })
+
+  it('edits a payment line directly from the debt timeline', async () => {
+    const borrower = await createBorrower({ name: 'Amina' })
+    const debt = await createDebt({
+      borrowerId: borrower.id,
+      label: 'Loyer',
+      openingBalanceCents: 120000,
+      occurredOn: '2026-03-01'
+    })
+    await addLedgerEntry({
+      debtId: debt.id,
+      kind: 'payment',
+      amountCents: 20000,
+      occurredOn: '2026-03-15',
+      description: 'Paiement mars'
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={[`/dettes/${debt.id}`]}>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByRole('heading', { name: 'Loyer' })
+    await user.click(screen.getByRole('button', { name: /modifier la ligne paiement/i }))
+    await user.clear(screen.getByLabelText('Montant (€) de la ligne'))
+    await user.type(screen.getByLabelText('Montant (€) de la ligne'), '350')
+    await user.clear(screen.getByLabelText(/date precise de la ligne/i))
+    await user.type(screen.getByLabelText(/date precise de la ligne/i), '2026-03-20')
+    await user.clear(screen.getByLabelText(/detail de la ligne/i))
+    await user.type(screen.getByLabelText(/detail de la ligne/i), 'Paiement corrige')
+    await user.click(screen.getByRole('button', { name: /enregistrer la ligne/i }))
+
+    await screen.findByText(/ecriture mise a jour/i)
+    await screen.findByText(/paiement corrige/i)
+    await screen.findAllByText(/350,00 €/i)
+  })
+
+  it('edits an opening balance line and refreshes the debt totals', async () => {
+    const borrower = await createBorrower({ name: 'Amina' })
+    const debt = await createDebt({
+      borrowerId: borrower.id,
+      label: 'Loyer',
+      openingBalanceCents: 120000,
+      occurredOn: '2026-03-01'
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={[`/dettes/${debt.id}`]}>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByRole('heading', { name: 'Loyer' })
+    await user.click(screen.getByRole('button', { name: /modifier la ligne solde initial/i }))
+    await user.clear(screen.getByLabelText('Montant (€) de la ligne'))
+    await user.type(screen.getByLabelText('Montant (€) de la ligne'), '1500')
+    await user.clear(screen.getByLabelText(/date precise de la ligne/i))
+    await user.type(screen.getByLabelText(/date precise de la ligne/i), '2026-03-05')
+    await user.clear(screen.getByLabelText(/detail de la ligne/i))
+    await user.type(screen.getByLabelText(/detail de la ligne/i), 'Ouverture corrigee')
+    await user.click(screen.getByRole('button', { name: /enregistrer la ligne/i }))
+
+    await screen.findByText(/ecriture mise a jour/i)
+    await screen.findByText(/ouverture corrigee/i)
+    await screen.findAllByText(/1 500,00 €/i)
+  })
+
+  it('deletes a debt from its detail page and redirects back to the borrower', async () => {
+    const borrower = await createBorrower({ name: 'Amina' })
+    const debt = await createDebt({
+      borrowerId: borrower.id,
+      label: 'Loyer',
+      openingBalanceCents: 120000,
+      occurredOn: '2026-03-01'
+    })
+    await addLedgerEntry({
+      debtId: debt.id,
+      kind: 'payment',
+      amountCents: 20000,
+      occurredOn: '2026-03-15',
+      description: 'Paiement mars'
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={[`/dettes/${debt.id}`]}>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByRole('heading', { name: 'Loyer' })
+    await user.click(screen.getByRole('button', { name: /supprimer cette dette/i }))
+    expect(window.confirm).toHaveBeenCalled()
+    expect(String(vi.mocked(window.confirm).mock.calls.at(-1)?.[0])).toContain('Les paiements, avances, ajustements et lignes en attente')
+    await screen.findByText(/dette supprimee/i)
+    await screen.findByRole('heading', { name: 'Amina' })
+    expect(screen.queryByRole('heading', { name: 'Loyer' })).not.toBeInTheDocument()
+  })
+
+  it('deletes a borrower from its detail page and returns to an empty dashboard', async () => {
+    const borrower = await createBorrower({ name: 'Amina' })
+    await createDebt({
+      borrowerId: borrower.id,
+      label: 'Loyer',
+      openingBalanceCents: 120000,
+      occurredOn: '2026-03-01'
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={[`/emprunteurs/${borrower.id}`]}>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByRole('heading', { name: 'Amina' })
+    await user.click(screen.getByRole('button', { name: /supprimer cet emprunteur/i }))
+    expect(window.confirm).toHaveBeenCalled()
+    expect(String(vi.mocked(window.confirm).mock.calls.at(-1)?.[0])).toContain('Toutes les dettes, ecritures et lignes en attente')
+    await screen.findByText(/emprunteur supprime/i)
+    await screen.findByRole('heading', { name: /suivi prets/i })
+    expect(screen.queryByText('Amina')).not.toBeInTheDocument()
+  })
+
+  it('wipes all local data after the strong typed confirmation', async () => {
+    const borrower = await createBorrower({ name: 'Amina' })
+    await createDebt({
+      borrowerId: borrower.id,
+      label: 'Loyer',
+      openingBalanceCents: 120000,
+      occurredOn: '2026-03-01'
+    })
+
+    vi.mocked(window.prompt).mockReturnValue('EFFACER')
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={['/import']}>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByRole('heading', { name: /protection des donnees/i })
+    await user.click(await screen.findByRole('button', { name: /tout effacer sur cet appareil/i }))
+    expect(window.prompt).toHaveBeenCalled()
+    expect(String(vi.mocked(window.prompt).mock.calls.at(-1)?.[0])).toContain('Tapez EFFACER pour confirmer')
+    await screen.findByText(/toutes les donnees locales ont ete effacees/i)
+    await screen.findByRole('heading', { name: /suivi prets/i })
+    expect(screen.queryByText('Amina')).not.toBeInTheDocument()
   })
 
   it('filters settled borrowers and settled-debt payments on the dashboard', async () => {

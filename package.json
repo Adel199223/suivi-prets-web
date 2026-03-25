@@ -11,7 +11,8 @@
     "import:preview": "python3 tooling/import_workbook_preview.py",
     "test": "vitest run",
     "test:watch": "vitest",
-    "start:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-windows.ps1",
+    "start:windows": "node -e \"const path=require('node:path');const {spawnSync}=require('node:child_process');const root=process.env.INIT_CWD||process.cwd();const script=path.resolve(root,'scripts/start-windows.ps1');const extra=process.argv.slice(1);const result=spawnSync('powershell',['-NoProfile','-ExecutionPolicy','Bypass','-File',script,...extra],{stdio:'inherit'});if(result.error){console.error('[ERROR] '+result.error.message);process.exit(1)}process.exit(result.status??1)\" --",
+    "stop:windows": "node -e \"const path=require('node:path');const {spawnSync}=require('node:child_process');const root=process.env.INIT_CWD||process.cwd();const script=path.resolve(root,'scripts/stop-windows.ps1');const extra=process.argv.slice(1);const result=spawnSync('powershell',['-NoProfile','-ExecutionPolicy','Bypass','-File',script,...extra],{stdio:'inherit'});if(result.error){console.error('[ERROR] '+result.error.message);process.exit(1)}process.exit(result.status??1)\" --",
     "validate:agent-docs": "node tooling/validate-agent-docs.mjs",
     "validate:workspace-hygiene": "node tooling/validate-workspace-hygiene.mjs",
     "validate:ui": "node tooling/validate-ui-surface.mjs"

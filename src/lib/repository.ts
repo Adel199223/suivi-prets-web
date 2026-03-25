@@ -63,11 +63,21 @@ export async function createBorrower(input: { name: string; notes?: string }): P
   return record
 }
 
-export async function updateBorrowerNotes(borrowerId: string, notes: string): Promise<void> {
-  await db.borrowers.update(borrowerId, {
-    notes: notes.trim(),
+export async function updateBorrower(borrowerId: string, input: { name: string; notes: string }): Promise<void> {
+  const name = input.name.trim()
+  if (!name) {
+    throw new Error('Ajoutez un nom d’emprunteur.')
+  }
+
+  const updated = await db.borrowers.update(borrowerId, {
+    name,
+    notes: input.notes.trim(),
     updatedAt: nowIso()
   })
+
+  if (updated === 0) {
+    throw new Error('Emprunteur introuvable.')
+  }
 }
 
 export async function createDebt(input: {
@@ -117,11 +127,21 @@ export async function createDebt(input: {
   return debt
 }
 
-export async function updateDebtNotes(debtId: string, notes: string): Promise<void> {
-  await db.debts.update(debtId, {
-    notes: notes.trim(),
+export async function updateDebt(debtId: string, input: { label: string; notes: string }): Promise<void> {
+  const label = input.label.trim()
+  if (!label) {
+    throw new Error('Ajoutez un libelle de dette.')
+  }
+
+  const updated = await db.debts.update(debtId, {
+    label,
+    notes: input.notes.trim(),
     updatedAt: nowIso()
   })
+
+  if (updated === 0) {
+    throw new Error('Dette introuvable.')
+  }
 }
 
 export async function addLedgerEntry(input: {
@@ -154,11 +174,78 @@ export async function addLedgerEntry(input: {
   return entry
 }
 
+export async function updateLedgerEntry(entryId: string, input: {
+  amountCents: number
+  occurredOn: string | null
+  description: string
+}): Promise<void> {
+  if (!input.amountCents || input.amountCents <= 0) {
+    throw new Error('Entrez un montant valide.')
+  }
+
+  const existing = await db.entries.get(entryId)
+  if (!existing) {
+    throw new Error('Ecriture introuvable.')
+  }
+
+  const occurredOn = input.occurredOn?.trim() ? input.occurredOn.trim() : null
+  const nextPeriodKey = occurredOn ? periodKeyFromDate(occurredOn) : existing.periodKey
+  if (!nextPeriodKey) {
+    throw new Error('Choisissez une date valide.')
+  }
+
+  await db.entries.put({
+    ...existing,
+    amountCents: input.amountCents,
+    occurredOn,
+    periodKey: nextPeriodKey,
+    description: input.description.trim(),
+    updatedAt: nowIso()
+  })
+}
+
+export async function deleteLedgerEntry(entryId: string): Promise<void> {
+  await db.entries.delete(entryId)
+}
+
+export async function deleteUnresolvedImport(unresolvedImportId: string): Promise<void> {
+  await db.unresolvedImports.delete(unresolvedImportId)
+}
+
 export async function setDebtClosed(debtId: string, closed: boolean): Promise<void> {
   await db.debts.update(debtId, {
     status: closed ? 'closed' : 'open',
     closedAt: closed ? nowIso() : null,
     updatedAt: nowIso()
+  })
+}
+
+export async function deleteDebt(debtId: string): Promise<void> {
+  await db.transaction('rw', [db.debts, db.entries, db.unresolvedImports], async () => {
+    await Promise.all([
+      db.entries.where('debtId').equals(debtId).delete(),
+      db.unresolvedImports.where('debtId').equals(debtId).delete(),
+    ])
+    await db.debts.delete(debtId)
+  })
+}
+
+export async function deleteBorrower(borrowerId: string): Promise<void> {
+  await db.transaction('rw', [db.borrowers, db.debts, db.entries, db.unresolvedImports], async () => {
+    const debtIds = (await db.debts.where('borrowerId').equals(borrowerId).primaryKeys()) as string[]
+
+    if (debtIds.length > 0) {
+      await Promise.all([
+        db.entries.where('debtId').anyOf(debtIds).delete(),
+        db.unresolvedImports.where('debtId').anyOf(debtIds).delete(),
+      ])
+    }
+
+    await Promise.all([
+      db.unresolvedImports.where('borrowerId').equals(borrowerId).delete(),
+      db.debts.where('borrowerId').equals(borrowerId).delete(),
+    ])
+    await db.borrowers.delete(borrowerId)
   })
 }
 
