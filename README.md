@@ -1,34 +1,106 @@
 # Suivi Prets
 
-Application web locale en React/Vite pour suivre des dettes, enregistrer des paiements, ajouter de nouvelles avances et fusionner un apercu JSON local genere depuis un classeur `.ods` de la meme famille que le suivi actuel.
+Application web locale en React/Vite pour suivre des dettes et fusionner un classeur `.ods` dans une base locale de navigateur (local-first).
 
-## Demarrage
+Le code est public; vos données importées ne sont pas envoyées à GitHub. Elles restent uniquement dans le navigateur tant qu’elles ne sont pas exportées en `.json`.
+
+## Demarrage (Windows)
+
+### Prérequis
+
+- Windows 10/11
+- Node.js 20+ (ou version LTS)
+- npm
+
+### Lancer en local
+
+```powershell
+cd C:\chemin\vers\suivi-prets-web
+npm install
+npm run dev
+```
+
+Ouvrir [http://127.0.0.1:4173](http://127.0.0.1:4173).
+
+### Commandes WSL (optionnel)
 
 ```powershell
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm install"
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run dev"
 ```
 
-Ouvrir [http://127.0.0.1:4173](http://127.0.0.1:4173).
+## Import local
 
-## Import Local
+Le flux normal est d’importer un classeur `.ods` directement dans l’onglet **Import & sauvegarde**.
 
 ```powershell
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run import:preview -- --input /chemin/classeur.ods --output output/private/apercu.json"
 ```
 
-Puis chargez `output/private/apercu.json` depuis la page `Import & sauvegarde`.
+La commande ci-dessus reste un utilitaire opérateur de secours.
+
+## Protection des données privées
+
+### Avant tout commit
+
+- Vérifier qu’aucun fichier personnel n’est en staging : `*.ods`, `*.backup.json`, `apercu*.json`, `import-workbook-preview*.json`, `output/private/*`.
+- Vérifier qu’aucune archive `suivi-prets-backup-*.json` n’est suivie.
+- Vérifier les résolutions locales/import privées (ex: `workbook-import-resolutions*.json`).
+
+### Première utilisation de l’application
+
+- Exportez une copie de secours régulièrement avec `Exporter une sauvegarde`.
+- Avant un changement d’appareil/navigateur, utilisez d’abord cette copie de secours puis fermez la session proprement.
+- Une restauration se fait ensuite en important manuellement la sauvegarde.
+
+## Déploiement static public (GitHub Pages / Netlify / Vercel)
+
+- `npm run build`
+- déployer le contenu de `dist/`
+- configurer le fallback SPA : toutes les routes doivent renvoyer `index.html`
+- valider une navigation profonde en production : ouvrir `/import` et faire un rafraîchissement forcé, pas de 404 attendu
+
+Un contrôle simple de build pour déploiement : `npm run build`.
 
 ## Validation
 
 ```powershell
-wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm test"
-wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run lint"
-wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run build"
-wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:agent-docs"
-wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:workspace-hygiene"
-wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:ui"
+npm test
+npm run lint
+npm run build
+npm run validate:agent-docs
+npm run validate:workspace-hygiene
+npm run validate:ui
 ```
+
+## Résolution de soucis (Windows)
+
+- Port déjà utilisé (4173) : ajuster la variable dans `package.json` ou fermer l’autre app Vite.
+- Cache de l’application : `Ctrl+Shift+R` pour forcer le rechargement.
+- Données locales incohérentes : vérifier que la copie de secours récente est bien restaurée; la restauration remplace toutes les données locales du navigateur.
+
+## Harness Bootstrap
+
+Le repo utilise maintenant un harness bootstrap pilote par profil pour la documentation assistant.
+
+- Source kit copiee : `bootstrap_harness_kit/`
+- Source vendored pour l'application locale : `docs/assistant/templates/`
+- Profil bootstrap : `docs/assistant/HARNESS_PROFILE.json`
+- Etat resolu : `docs/assistant/runtime/BOOTSTRAP_STATE.json`
+- Mapping des sorties generiques vers les fichiers locaux existants : `docs/assistant/HARNESS_OUTPUT_MAP.json`
+
+Verification bootstrap :
+
+```powershell
+python3 tooling/check_harness_profile.py --profile docs/assistant/HARNESS_PROFILE.json --registry docs/assistant/templates/BOOTSTRAP_ARCHETYPE_REGISTRY.json
+python3 tooling/preview_harness_sync.py --profile docs/assistant/HARNESS_PROFILE.json --registry docs/assistant/templates/BOOTSTRAP_ARCHETYPE_REGISTRY.json --output-map docs/assistant/HARNESS_OUTPUT_MAP.json --write-state docs/assistant/runtime/BOOTSTRAP_STATE.json
+```
+
+Commandes debutant/sures :
+
+- `docs/assistant/SAFE_COMMANDS.md`
+- `docs/assistant/TERMS_IN_PLAIN_ENGLISH.md`
+- `docs/assistant/workflows/PROJECT_HARNESS_SYNC_WORKFLOW.md`
 
 ## Assistant Docs
 

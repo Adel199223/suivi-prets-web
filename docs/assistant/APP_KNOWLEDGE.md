@@ -31,6 +31,6 @@ This bridge is shorter than `APP_KNOWLEDGE.md` and defers to it when details con
 - `npm run import:preview -- --input <workbook.ods> --output <preview.json>` for local workbook conversion
 - `npm run import:preview -- --input <workbook.ods> --output <preview.json> --resolutions <resolutions.json>` for fingerprint-guarded local row fixes
 - `npm run build` for bundle safety
-- `npm run validate:ui` for repo-owned browser validation
+- `npm run validate:ui` for repo-owned browser validation; the default path is self-contained and starts the local preview target before running Playwright
 - `npm run validate:agent-docs` and `npm run validate:workspace-hygiene` for repo contracts
 - Current follow-up priority after a green validation pass: run the first larger private workbook migration when the next workbook is available.

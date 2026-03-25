@@ -10,6 +10,8 @@ import type {
 import { getBlockingImportIssues, getInformationalImportIssues } from '../lib/importIssues'
 import type { StorageStatus } from '../lib/storagePersistence'
 
+const FIRST_SESSION_SETUP_KEY = 'suivi-prets-web:first-session-setup-seen'
+
 interface ImportPageProps {
   backupHealth: BackupHealth
   importArtifact: WorkbookImportPreviewV1 | null
@@ -176,6 +178,22 @@ export function ImportPage({
       : backupHealth.state === 'empty'
         ? 'Pret a enregistrer ici'
         : 'Enregistre sur cet appareil'
+  const [showFirstSessionSetup, setShowFirstSessionSetup] = useState(() => {
+    try {
+      return window.localStorage.getItem(FIRST_SESSION_SETUP_KEY) !== '1'
+    } catch {
+      return true
+    }
+  })
+
+  function dismissFirstSessionSetup() {
+    try {
+      window.localStorage.setItem(FIRST_SESSION_SETUP_KEY, '1')
+    } catch {
+      // best effort
+    }
+    setShowFirstSessionSetup(false)
+  }
 
   return (
     <div className="page-stack">
@@ -184,8 +202,14 @@ export function ImportPage({
           <p className="eyebrow">Import et protection</p>
           <h1>Protection des donnees</h1>
           <p className="lede">
-            Importez directement un classeur `.ods` dans cette fenetre. Les donnees validees sont enregistrees localement dans ce navigateur; une copie de secours exportable sert surtout si vous voulez restaurer ailleurs plus tard.
+            Importez directement un classeur `.ods` dans cette fenetre. Les donnees validees sont enregistrees localement dans ce navigateur, sur cet appareil; l’app reste locale et ce depot public contient uniquement le code.
           </p>
+          <div className={`notice-panel notice-panel-${backupHealth.state}`}>
+            <strong>Confidentialite</strong>
+            <p className="section-note">
+              Les donnees importees depuis vos fichiers restent dans ce navigateur. Elles ne sont ni envoyees vers un serveur, ni visibles dans le repo public.
+            </p>
+          </div>
           {!showFullProtectionPanel ? (
             <div className="compact-status-row">
               <span className="status-chip status-chip-neutral">{quietProtectionLabel}</span>
@@ -212,6 +236,23 @@ export function ImportPage({
           </div>
         </div>
       </section>
+
+      {showFirstSessionSetup ? (
+        <section className="section-card section-card-compact">
+          <div className={`notice-panel notice-panel-${backupHealth.state}`}>
+            <strong>Nouvelle session sur ce navigateur</strong>
+            <p className="section-note">
+              Avant un changement d’appareil, exportez une copie de secours puis utilisez la restauration sur le nouvel appareil pour repasser vos donnees.
+            </p>
+            <p className="section-note">
+              La restauration est un import de fichier local et remplace la base de donnees locale actuelle.
+            </p>
+            <button type="button" className="ghost-button" onClick={dismissFirstSessionSetup}>
+              J’ai compris
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {!showFullProtectionPanel && showProtectionDetails ? (
         <section className="section-card section-card-compact">
@@ -258,7 +299,7 @@ export function ImportPage({
           />
         </label>
         <p className="section-note">
-          Les donnees importees seront visibles dans ce navigateur, sur cet appareil, des que vous validez la fusion.
+          Les donnees importees restent sur cet appareil et dans ce navigateur tant que vous n’effectuez pas une restauration via un backup. Le repo public ne contient pas ces donnees.
         </p>
         {isImportLoading ? <p className="section-note">Analyse du classeur en cours...</p> : null}
         {importPreview ? (

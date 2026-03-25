@@ -37,6 +37,7 @@ This directory is its own git repository. Use separate worktrees or branches for
 - UI validation work goes to `docs/assistant/workflows/UI_SURFACE_VALIDATION_WORKFLOW.md`.
 - Local storage, backup, schema, or portability changes go to `docs/assistant/LOCAL_PERSISTENCE_KNOWLEDGE.md`.
 - Named-product parity or inspiration work goes to `docs/assistant/workflows/REFERENCE_DISCOVERY_WORKFLOW.md` before implementation decisions.
+- Bootstrap harness adoption, profile/state sync, and `implement the template files` go to `docs/assistant/workflows/PROJECT_HARNESS_SYNC_WORKFLOW.md`.
 
 ## Sub-Agent Routing
 

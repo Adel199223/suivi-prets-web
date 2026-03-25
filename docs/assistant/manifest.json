@@ -85,6 +85,18 @@
       "primary_files": ["APP_KNOWLEDGE.md", "agent.md", "docs/assistant/INDEX.md"],
       "targeted_tests": ["test/tooling/validate-agent-docs.test.ts"],
       "validation_commands": ["npm run validate:agent-docs"]
+    },
+    {
+      "id": "project_harness_sync",
+      "doc": "docs/assistant/workflows/PROJECT_HARNESS_SYNC_WORKFLOW.md",
+      "scope": "Profile-driven bootstrap adoption and repo-local harness sync from vendored templates.",
+      "primary_files": ["docs/assistant/HARNESS_PROFILE.json", "docs/assistant/HARNESS_OUTPUT_MAP.json", "docs/assistant/manifest.json"],
+      "targeted_tests": ["npm run validate:agent-docs"],
+      "validation_commands": [
+        "python3 tooling/check_harness_profile.py --profile docs/assistant/HARNESS_PROFILE.json --registry docs/assistant/templates/BOOTSTRAP_ARCHETYPE_REGISTRY.json",
+        "python3 tooling/preview_harness_sync.py --profile docs/assistant/HARNESS_PROFILE.json --registry docs/assistant/templates/BOOTSTRAP_ARCHETYPE_REGISTRY.json --output-map docs/assistant/HARNESS_OUTPUT_MAP.json --write-state docs/assistant/runtime/BOOTSTRAP_STATE.json",
+        "npm run validate:agent-docs"
+      ]
     }
   ],
   "global_commands": [
@@ -114,5 +126,12 @@
     "benchmark_matrix_policy": "Only create benchmark matrices for parity-sensitive UI work.",
     "inspiration_reference_discovery_policy": "Named-product inspiration requests must route through REFERENCE_DISCOVERY_WORKFLOW.md first."
   },
-  "last_updated": "2026-03-20"
+  "bootstrap": {
+    "profile": "docs/assistant/HARNESS_PROFILE.json",
+    "state": "docs/assistant/runtime/BOOTSTRAP_STATE.json",
+    "output_map": "docs/assistant/HARNESS_OUTPUT_MAP.json",
+    "templates_root": "docs/assistant/templates",
+    "sync_workflow": "docs/assistant/workflows/PROJECT_HARNESS_SYNC_WORKFLOW.md"
+  },
+  "last_updated": "2026-03-25"
 }

@@ -74,6 +74,22 @@ Ask before executing:
 - Commit, branch, worktree, push, and publish hygiene: `docs/assistant/workflows/COMMIT_PUBLISH_WORKFLOW.md`
 - Docs updates and user-guide sync: `docs/assistant/workflows/DOCS_MAINTENANCE_WORKFLOW.md`
 - Support and non-technical explanation work: `docs/assistant/features/APP_USER_GUIDE.md`
+- Bootstrap harness adoption, profile/state sync, or `implement the template files`: `docs/assistant/workflows/PROJECT_HARNESS_SYNC_WORKFLOW.md`
+
+## Bootstrap Harness Sync
+
+- This repo uses the existing-repo bootstrap path with `docs/assistant/HARNESS_PROFILE.json` as the local source of truth for archetype, mode, and module selection.
+- Resolve bootstrap state in this order when those files exist:
+  1. `docs/assistant/HARNESS_PROFILE.json`
+  2. `docs/assistant/runtime/BOOTSTRAP_STATE.json`
+  3. `docs/assistant/templates/BOOTSTRAP_VERSION.json`
+  4. `docs/assistant/templates/BOOTSTRAP_ARCHETYPE_REGISTRY.json`
+  5. `docs/assistant/templates/BOOTSTRAP_PROFILE_RESOLUTION.md`
+- Preserve repo-local equivalents through `docs/assistant/HARNESS_OUTPUT_MAP.json`.
+- `docs/assistant/INDEX.md` is the effective local `START_HERE` target for this repo.
+- `implement the template files` and `sync project harness` update repo-local harness files without editing `docs/assistant/templates/*`.
+- `audit project harness` is inspect-only.
+- `check project harness` is validation-only.
 
 ## Support Routing
 

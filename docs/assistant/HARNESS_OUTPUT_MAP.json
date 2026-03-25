@@ -1,0 +1,8 @@
+{
+  "output_mappings": [
+    {
+      "resolved_output": "docs/assistant/START_HERE.md",
+      "sync_targets": ["docs/assistant/INDEX.md"]
+    }
+  ]
+}

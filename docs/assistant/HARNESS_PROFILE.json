@@ -1,0 +1,31 @@
+{
+  "$schema": "./schemas/HARNESS_PROFILE.schema.json",
+  "schema_version": 1,
+  "project": {
+    "name": "suivi-prets-web",
+    "description": "Local-first web app for debt tracking and ODS import in the browser"
+  },
+  "operator": {
+    "experience_level": "beginner",
+    "preferred_tone": "plain_english",
+    "needs_safe_commands": true
+  },
+  "stack": {
+    "primary_language": "typescript",
+    "framework": "web",
+    "surfaces": ["web"],
+    "target_os": ["cross_platform"]
+  },
+  "bootstrap": {
+    "archetype": "web_app",
+    "mode": "standard",
+    "enabled_modules": [],
+    "disabled_modules": [],
+    "uses_openai": false,
+    "needs_codespaces": false,
+    "has_browser_bridge": false,
+    "notes": [
+      "Existing repo with established assistant docs and WSL-safe validation wrappers."
+    ]
+  }
+}

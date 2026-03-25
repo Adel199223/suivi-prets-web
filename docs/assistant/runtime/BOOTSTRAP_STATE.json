@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-03-25T17:44:46.275643Z",
+  "bootstrap_version": "2026.03-profile-driven-phase1",
+  "profile_fingerprint": "d6b64a06e2bf",
+  "resolved": {
+    "project": "suivi-prets-web",
+    "archetype": "web_app",
+    "mode": "standard",
+    "modules": [
+      "base_docs",
+      "beginner_support",
+      "build_identity",
+      "capability_discovery",
+      "diagnostics",
+      "issue_memory",
+      "local_env_overlay",
+      "qa_checks",
+      "release_management",
+      "session_resume"
+    ],
+    "starter_files": [
+      "scripts/dev.ps1",
+      "scripts/build.ps1",
+      "scripts/test.ps1"
+    ],
+    "notes": [
+      "codespaces can be useful here if the profile enables it",
+      "Existing repo with established assistant docs and WSL-safe validation wrappers."
+    ]
+  }
+}

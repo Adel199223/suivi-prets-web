@@ -5,13 +5,17 @@ import { fileURLToPath } from 'node:url'
 const THIS_FILE = fileURLToPath(import.meta.url)
 const TOOLING_DIR = path.dirname(THIS_FILE)
 export const DEFAULT_ROOT_DIR = path.resolve(TOOLING_DIR, '..')
-export const REQUIRED_EXCLUDES = ['**/node_modules/**', '**/dist/**', '**/output/**']
+export const REQUIRED_EXCLUDES = ['**/node_modules/**', '**/dist/**', '**/output/**', '**/__pycache__/**']
+export const REQUIRED_GITIGNORE_PATTERNS = ['output/', '__pycache__/', '*.pyc']
+export const REQUIRED_FILE_EXCLUDES = ['**/dist', '**/output', '**/__pycache__']
 
 export function validateWorkspaceHygiene(rootDir = DEFAULT_ROOT_DIR) {
   const errors = []
   const gitignore = fs.readFileSync(path.join(rootDir, '.gitignore'), 'utf8')
-  if (!gitignore.includes('output/')) {
-    errors.push('.gitignore must ignore output/')
+  for (const pattern of REQUIRED_GITIGNORE_PATTERNS) {
+    if (!gitignore.includes(pattern)) {
+      errors.push(`.gitignore must ignore ${pattern}`)
+    }
   }
 
   const settings = JSON.parse(fs.readFileSync(path.join(rootDir, '.vscode/settings.json'), 'utf8'))
@@ -23,11 +27,10 @@ export function validateWorkspaceHygiene(rootDir = DEFAULT_ROOT_DIR) {
       errors.push(`Missing search exclude: ${key}`)
     }
   }
-  if (settings['files.exclude']?.['**/dist'] !== true) {
-    errors.push('Missing files.exclude for **/dist')
-  }
-  if (settings['files.exclude']?.['**/output'] !== true) {
-    errors.push('Missing files.exclude for **/output')
+  for (const key of REQUIRED_FILE_EXCLUDES) {
+    if (settings['files.exclude']?.[key] !== true) {
+      errors.push(`Missing files.exclude for ${key}`)
+    }
   }
   return errors
 }

@@ -1,6 +1,8 @@
+import { spawn } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 import { chromium, devices } from 'playwright'
 
@@ -8,6 +10,10 @@ const THIS_FILE = fileURLToPath(import.meta.url)
 const TOOLING_DIR = path.dirname(THIS_FILE)
 const DEFAULT_ROOT_DIR = path.resolve(TOOLING_DIR, '..')
 export const DEFAULT_BASE_URL = 'http://127.0.0.1:4173'
+
+export function getPackageManagerCommand(platform = process.platform) {
+  return platform === 'win32' ? 'npm.cmd' : 'npm'
+}
 
 export function createArtifactPaths(outputDir) {
   return {
@@ -22,11 +28,13 @@ export function createArtifactPaths(outputDir) {
 export function parseCliArgs(argv = process.argv.slice(2)) {
   let baseUrl = DEFAULT_BASE_URL
   let outputDir = path.join(DEFAULT_ROOT_DIR, 'output', 'playwright')
+  let explicitBaseUrl = false
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index]
     if (argument === '--base-url') {
       baseUrl = argv[index + 1] ?? baseUrl
+      explicitBaseUrl = true
       index += 1
       continue
     }
@@ -38,10 +46,88 @@ export function parseCliArgs(argv = process.argv.slice(2)) {
     throw new Error(`Unknown argument: ${argument}`)
   }
 
-  return { baseUrl, outputDir }
+  return { baseUrl, outputDir, explicitBaseUrl }
 }
 
-export async function runUiValidation({ baseUrl, outputDir }) {
+export async function probeBaseUrl(baseUrl) {
+  try {
+    const response = await fetch(baseUrl, {
+      method: 'GET',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(2_000)
+    })
+    return response.ok || (response.status >= 300 && response.status < 400)
+  } catch {
+    return false
+  }
+}
+
+export async function waitForBaseUrl(
+  baseUrl,
+  {
+    timeoutMs = 20_000,
+    intervalMs = 250,
+    probe = probeBaseUrl,
+    errorMessage = `Base URL ${baseUrl} did not become reachable within ${timeoutMs}ms.`
+  } = {}
+) {
+  const deadline = Date.now() + timeoutMs
+
+  while (Date.now() < deadline) {
+    if (await probe(baseUrl)) {
+      return
+    }
+    await delay(intervalMs)
+  }
+
+  throw new Error(errorMessage)
+}
+
+export function runCommand(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: DEFAULT_ROOT_DIR,
+      stdio: 'inherit',
+      ...options
+    })
+    child.once('error', reject)
+    child.once('exit', (code) => {
+      if (code === 0) {
+        resolve()
+        return
+      }
+      reject(new Error(`Command failed: ${command} ${args.join(' ')} (exit code ${code ?? 'null'})`))
+    })
+  })
+}
+
+export function startCommand(command, args, options = {}) {
+  return spawn(command, args, {
+    cwd: DEFAULT_ROOT_DIR,
+    stdio: 'inherit',
+    ...options
+  })
+}
+
+export async function stopCommand(child, { timeoutMs = 5_000 } = {}) {
+  if (!child || child.exitCode !== null || child.killed) {
+    return
+  }
+
+  const waitForExit = new Promise((resolve) => {
+    child.once('exit', () => resolve())
+    child.once('error', () => resolve())
+  })
+
+  child.kill('SIGTERM')
+  const exited = await Promise.race([waitForExit.then(() => true), delay(timeoutMs).then(() => false)])
+  if (!exited && child.exitCode === null) {
+    child.kill('SIGKILL')
+    await waitForExit
+  }
+}
+
+export async function runBrowserValidation({ baseUrl, outputDir }) {
   await fs.mkdir(outputDir, { recursive: true })
   const artifacts = createArtifactPaths(outputDir)
   const checks = []
@@ -118,9 +204,45 @@ export async function runUiValidation({ baseUrl, outputDir }) {
   }
 }
 
+export async function runUiValidation(
+  { baseUrl, outputDir, explicitBaseUrl = false },
+  {
+    packageManagerCommand = getPackageManagerCommand(),
+    runCommandFn = runCommand,
+    startCommandFn = startCommand,
+    stopCommandFn = stopCommand,
+    waitForBaseUrlFn = waitForBaseUrl,
+    runBrowserValidationFn = runBrowserValidation
+  } = {}
+) {
+  let previewProcess = null
+
+  try {
+    if (explicitBaseUrl) {
+      await waitForBaseUrlFn(baseUrl, {
+        timeoutMs: 10_000,
+        errorMessage: `Base URL ${baseUrl} did not become reachable. Start the target server first or omit --base-url to let validate:ui build and preview the app automatically.`
+      })
+    } else {
+      await runCommandFn(packageManagerCommand, ['run', 'build'])
+      previewProcess = startCommandFn(packageManagerCommand, ['run', 'preview'])
+      await waitForBaseUrlFn(baseUrl, {
+        timeoutMs: 20_000,
+        errorMessage: `Preview server at ${baseUrl} did not become reachable after running npm run preview.`
+      })
+    }
+
+    return await runBrowserValidationFn({ baseUrl, outputDir })
+  } finally {
+    if (previewProcess) {
+      await stopCommandFn(previewProcess)
+    }
+  }
+}
+
 async function main() {
-  const { baseUrl, outputDir } = parseCliArgs()
-  await runUiValidation({ baseUrl, outputDir })
+  const { baseUrl, outputDir, explicitBaseUrl } = parseCliArgs()
+  await runUiValidation({ baseUrl, outputDir, explicitBaseUrl })
 }
 
 if (process.argv[1] === THIS_FILE) {

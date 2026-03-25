@@ -18,6 +18,7 @@ Use this workflow for assistant-doc updates after confirmed implementation chang
 ## What Not To Do
 
 Don't use this workflow when the request is blanket rewriting or speculative doc gardening. Instead use the confirmed implementation scope and update only the touched docs.
+Don't use this workflow when the request is `implement the template files`, `sync project harness`, `audit project harness`, or `check project harness`. Instead use `PROJECT_HARNESS_SYNC_WORKFLOW.md`.
 
 ## Primary Files
 
@@ -39,6 +40,7 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:agent-d
 
 - If a change does not affect a user guide, say so and leave the guide alone.
 - If docs drift is local to one workflow, update that workflow instead of rewriting the stack.
+- If the request is actually about bootstrap profile/state or vendored template sync, route to `PROJECT_HARNESS_SYNC_WORKFLOW.md`.
 
 ## Handoff Checklist
 

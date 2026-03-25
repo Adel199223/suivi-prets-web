@@ -9,6 +9,7 @@ Use this workflow for top-level UI, responsive layout, import preview surfaces, 
 - Fresh validation artifacts
 - Clear fallback path when a broad suite is unavailable
 - User-facing locator coverage in the harness
+- A standalone `npm run validate:ui` path that builds, previews, and validates without requiring a manually started server
 
 ## When To Use
 
@@ -41,6 +42,8 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:ui"
 
 - Use targeted tests first.
 - Use the repo-owned browser harness second.
+- `npm run validate:ui` should build the app, start the local preview server on `http://127.0.0.1:4173`, wait for readiness, and then capture desktop and mobile artifacts under `output/playwright/`.
+- If `--base-url` is passed, treat that target as already running and fail clearly if it never becomes reachable.
 - Capture desktop and mobile screenshots plus a JSON summary under `output/playwright/`.
 - If a broad browser pass is not available, use the narrower harness path and document the caveat.
 

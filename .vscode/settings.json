@@ -2,15 +2,18 @@
   "files.watcherExclude": {
     "**/node_modules/**": true,
     "**/dist/**": true,
-    "**/output/**": true
+    "**/output/**": true,
+    "**/__pycache__/**": true
   },
   "search.exclude": {
     "**/node_modules/**": true,
     "**/dist/**": true,
-    "**/output/**": true
+    "**/output/**": true,
+    "**/__pycache__/**": true
   },
   "files.exclude": {
     "**/dist": true,
-    "**/output": true
+    "**/output": true,
+    "**/__pycache__": true
   }
 }

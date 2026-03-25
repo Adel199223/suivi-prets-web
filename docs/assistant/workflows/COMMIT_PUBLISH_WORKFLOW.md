@@ -45,9 +45,12 @@ git ls-files --others --exclude-standard
 - Keep `main` stable.
 - Use a branch or worktree for major work.
 - Stage only intended files and remove accidental staged files before commit.
+- Treat `docs/assistant/templates/*` as intentional tracked assets when bootstrap work touched them.
+- If vendored template changes and repo-local harness changes land together, split them into logical commits instead of one mixed commit.
 
 ## Handoff Checklist
 
 - Confirm branch safety
 - Confirm staged scope
 - Confirm validation commands run
+- Confirm vendored-template changes are intentional

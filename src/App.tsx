@@ -292,7 +292,7 @@ export default function App() {
       const backup = await parseBackupFile(file)
       const summary = summarizeBackup(backup)
       const confirmed = window.confirm(
-        `Restaurer la sauvegarde du ${summary.exportedAt.slice(0, 10)} ?\n\n${summary.borrowerCount} emprunteur(s)\n${summary.debtCount} dette(s)\n${summary.entryCount} ecriture(s)\n${summary.importCount} session(s) d’import\n${summary.unresolvedImportCount} ligne(s) en attente\n\nCette action remplace toutes les donnees locales actuelles.`
+        `Restaurer la sauvegarde du ${summary.exportedAt.slice(0, 10)} ?\n\n${summary.borrowerCount} emprunteur(s)\n${summary.debtCount} dette(s)\n${summary.entryCount} ecriture(s)\n${summary.importCount} session(s) d’import\n${summary.unresolvedImportCount} ligne(s) en attente\n\nCette action remplace DEFINITIVEMENT toutes les donnees locales de ce navigateur (pratique pour transferer vers un autre appareil). Confirmez-vous d’utiliser cette sauvegarde comme source de vérité ?`
       )
 
       if (!confirmed) {

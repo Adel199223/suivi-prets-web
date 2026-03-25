@@ -23,7 +23,7 @@ The product is designed around fast daily money tracking:
 - Dashboard, borrower, debt, and import surfaces now use calmer UX: healthy protection states are compact, pending-import details are collapsed by default, and backup/export tools are demoted behind an optional advanced section.
 - The WSL-local `.ods` preview generator remains available as an operator fallback for fixtures, regression checks, and exceptional private review work.
 - Fingerprint-guarded local resolution files can patch truly ambiguous workbook rows before preview generation.
-- Docs harness, validators, and browser validation harness are implemented.
+- Docs harness, validators, and a self-contained browser validation harness are implemented.
 - The first private four-debt import has been executed locally, replayed with a zero-issue resolved preview, and exported as a fresh private backup.
 - `npm test`, `npm run lint`, `npm run build`, `npm run validate:agent-docs`, `npm run validate:workspace-hygiene`, and `npm run validate:ui` are passing.
 
@@ -111,6 +111,8 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:agent-d
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:workspace-hygiene"
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:ui"
 ```
+
+`npm run validate:ui` now owns its local setup: by default it builds the app, starts the preview server on `http://127.0.0.1:4173`, waits for readiness, and writes artifacts under `output/playwright/`. Pass `--base-url` only when you intentionally want to reuse an already running target.
 
 ## Known Constraints
 
