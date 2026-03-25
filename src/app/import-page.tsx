@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { PendingImportResolutionCard } from '../components/PendingImportResolutionCard'
 import { formatDate, formatMoney } from '../domain/format'
 import type {
   BackupHealth,
@@ -21,6 +22,7 @@ interface ImportPageProps {
   lastBackupAt: string | null
   unresolvedImports: UnresolvedImportRecord[]
   pendingResolutionDrafts: Record<string, string>
+  pendingResolutionErrors: Record<string, string>
   rememberedImportResolutions: ImportIssueResolution[]
   storageStatus: StorageStatus | null
   onSelectImportWorkbook: (file: File) => Promise<void>
@@ -143,6 +145,7 @@ export function ImportPage({
   lastBackupAt,
   unresolvedImports,
   pendingResolutionDrafts,
+  pendingResolutionErrors,
   rememberedImportResolutions,
   storageStatus,
   onSelectImportWorkbook,
@@ -408,6 +411,9 @@ export function ImportPage({
                             {entry.sheetName} · ligne {entry.rowNumber} · {formatMoney(entry.amountCents)}
                           </p>
                           <p>{entry.reasonMessage}</p>
+                          <p className="section-note">
+                            Cette ligne pourra etre ajoutee plus tard des qu’un mois/periode sera choisi.
+                          </p>
                         </div>
                       </article>
                     ))}
@@ -487,30 +493,15 @@ export function ImportPage({
             <p className="empty-state">Aucune ligne en attente pour le moment.</p>
           ) : (
             unresolvedImports.map((item) => (
-              <article className="resolution-row" key={item.id}>
-                <div>
-                  <strong>
-                    {item.borrowerName} · {item.debtLabel}
-                  </strong>
-                  <p>
-                    {formatMoney(item.amountCents)} · {item.sheetName} · ligne {item.rowNumber}
-                  </p>
-                  <p>{item.reasonMessage}</p>
-                  <p>Fichier source: {item.fileName}</p>
-                </div>
-                <label className="resolution-input">
-                  Mois a appliquer
-                  <input
-                    aria-label={`Mois a appliquer pour ${item.sheetName} ligne ${item.rowNumber}`}
-                    type="month"
-                    value={pendingResolutionDrafts[item.id] ?? ''}
-                    onChange={(event) => onChangePendingResolution(item.id, event.currentTarget.value)}
-                  />
-                </label>
-                <button type="button" className="secondary-button" onClick={() => void onResolvePendingImport(item.id)}>
-                  Ajouter cette ligne a la dette
-                </button>
-              </article>
+              <PendingImportResolutionCard
+                key={item.id}
+                item={item}
+                periodKey={pendingResolutionDrafts[item.id] ?? ''}
+                error={pendingResolutionErrors[item.id] ?? null}
+                onChangePeriodKey={onChangePendingResolution}
+                onResolve={onResolvePendingImport}
+                showFileName
+              />
             ))
           )}
         </div>

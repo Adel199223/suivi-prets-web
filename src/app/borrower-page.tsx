@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { EntryComposer } from '../components/EntryComposer'
 import { MetricCard } from '../components/MetricCard'
+import { PendingImportResolutionCard } from '../components/PendingImportResolutionCard'
 import { formatDate, formatMoney, parseEuroInput } from '../domain/format'
 import type { BorrowerView, DebtView, EntryKind } from '../domain/types'
 
@@ -17,6 +18,10 @@ interface BorrowerPageProps {
   onAddEntry: (debtId: string, input: { kind: EntryKind; amountCents: number; occurredOn: string | null; description: string }) => Promise<void>
   onToggleDebtClosed: (debtId: string, closed: boolean) => Promise<void>
   onUpdateBorrowerNotes: (borrowerId: string, notes: string) => Promise<void>
+  pendingResolutionDrafts: Record<string, string>
+  pendingResolutionErrors: Record<string, string>
+  onChangePendingResolution: (unresolvedImportId: string, periodKey: string) => void
+  onResolvePendingImport: (unresolvedImportId: string) => Promise<void>
 }
 
 function DebtCard({
@@ -97,7 +102,11 @@ export function BorrowerPage({
   onCreateDebt,
   onAddEntry,
   onToggleDebtClosed,
-  onUpdateBorrowerNotes
+  onUpdateBorrowerNotes,
+  pendingResolutionDrafts,
+  pendingResolutionErrors,
+  onChangePendingResolution,
+  onResolvePendingImport
 }: BorrowerPageProps) {
   const [label, setLabel] = useState('')
   const [openingBalance, setOpeningBalance] = useState('')
@@ -193,15 +202,15 @@ export function BorrowerPage({
             <summary>Voir le detail des lignes en attente</summary>
             <div className="list-stack">
               {borrowerView.pendingImports.map((item) => (
-                <article className="resolution-row" key={item.id}>
-                  <div>
-                    <strong>{item.debtLabel}</strong>
-                    <p>
-                      {formatMoney(item.amountCents)} · {item.sheetName} · ligne {item.rowNumber}
-                    </p>
-                    <p>{item.reasonMessage}</p>
-                  </div>
-                </article>
+                <PendingImportResolutionCard
+                  key={item.id}
+                  item={item}
+                  periodKey={pendingResolutionDrafts[item.id] ?? ''}
+                  error={pendingResolutionErrors[item.id] ?? null}
+                  onChangePeriodKey={onChangePendingResolution}
+                  onResolve={onResolvePendingImport}
+                  showFileName
+                />
               ))}
             </div>
           </details>

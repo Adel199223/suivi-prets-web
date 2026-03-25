@@ -57,6 +57,10 @@ function BorrowerRoute(props: {
   onAddEntry: Parameters<typeof BorrowerPage>[0]['onAddEntry']
   onToggleDebtClosed: Parameters<typeof BorrowerPage>[0]['onToggleDebtClosed']
   onUpdateBorrowerNotes: Parameters<typeof BorrowerPage>[0]['onUpdateBorrowerNotes']
+  pendingResolutionDrafts: Parameters<typeof BorrowerPage>[0]['pendingResolutionDrafts']
+  pendingResolutionErrors: Parameters<typeof BorrowerPage>[0]['pendingResolutionErrors']
+  onChangePendingResolution: Parameters<typeof BorrowerPage>[0]['onChangePendingResolution']
+  onResolvePendingImport: Parameters<typeof BorrowerPage>[0]['onResolvePendingImport']
 }) {
   const params = useParams()
   const borrowerView = params.borrowerId ? props.snapshot.borrowerMap[params.borrowerId] : undefined
@@ -72,6 +76,10 @@ function DebtRoute(props: {
   onAddEntry: Parameters<typeof DebtPage>[0]['onAddEntry']
   onToggleDebtClosed: Parameters<typeof DebtPage>[0]['onToggleDebtClosed']
   onUpdateDebtNotes: Parameters<typeof DebtPage>[0]['onUpdateDebtNotes']
+  pendingResolutionDrafts: Parameters<typeof DebtPage>[0]['pendingResolutionDrafts']
+  pendingResolutionErrors: Parameters<typeof DebtPage>[0]['pendingResolutionErrors']
+  onChangePendingResolution: Parameters<typeof DebtPage>[0]['onChangePendingResolution']
+  onResolvePendingImport: Parameters<typeof DebtPage>[0]['onResolvePendingImport']
 }) {
   const params = useParams()
   const debtView = params.debtId ? props.snapshot.debtMap[params.debtId] : undefined
@@ -91,7 +99,9 @@ export default function App() {
   const [activeImportResolutions, setActiveImportResolutions] = useState<ImportIssueResolution[]>([])
   const [rememberedImportResolutions, setRememberedImportResolutions] = useState<ImportIssueResolution[]>([])
   const [pendingResolutionDrafts, setPendingResolutionDrafts] = useState<Record<string, string>>({})
+  const [pendingResolutionErrors, setPendingResolutionErrors] = useState<Record<string, string>>({})
   const [lastImportOutcome, setLastImportOutcome] = useState<RecentImportOutcome | null>(null)
+  const [isImportOutcomeCollapsed, setIsImportOutcomeCollapsed] = useState(false)
   const [isImportLoading, setIsImportLoading] = useState(false)
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null)
   const autoPersistInFlightRef = useRef(false)
@@ -198,6 +208,8 @@ export default function App() {
       setActiveImportResolutions(savedResolutions)
       setRememberedImportResolutions(savedResolutions)
       setPendingResolutionDrafts({})
+      setPendingResolutionErrors({})
+      setIsImportOutcomeCollapsed(false)
       announce(
         savedResolutions.length > 0
           ? blockingIssues.length > 0
@@ -217,6 +229,8 @@ export default function App() {
       setActiveImportResolutions([])
       setRememberedImportResolutions([])
       setPendingResolutionDrafts({})
+      setPendingResolutionErrors({})
+      setIsImportOutcomeCollapsed(false)
       setImportArtifact(null)
       announce(error instanceof Error ? error.message : "Impossible de charger l’apercu d’import.")
     } finally {
@@ -229,6 +243,15 @@ export default function App() {
       ...current,
       [unresolvedImportId]: periodKey
     }))
+    setPendingResolutionErrors((current) => {
+      if (!current[unresolvedImportId]) {
+        return current
+      }
+
+      const next = { ...current }
+      delete next[unresolvedImportId]
+      return next
+    })
   }
 
   async function handleApplyImport() {
@@ -248,6 +271,7 @@ export default function App() {
     setActiveImportResolutions([])
     setRememberedImportResolutions([])
     setPendingResolutionDrafts({})
+    setPendingResolutionErrors({})
     setLastImportOutcome({
       sessionId: session.id,
       fileName: session.fileName,
@@ -257,6 +281,7 @@ export default function App() {
       affectedBorrowerIds: result.affectedBorrowerIds,
       affectedDebtIds: result.affectedDebtIds,
     })
+    setIsImportOutcomeCollapsed(false)
     setFlash(null)
     navigate('/')
   }
@@ -264,7 +289,10 @@ export default function App() {
   async function handleResolvePendingImport(unresolvedImportId: string) {
     const periodKey = pendingResolutionDrafts[unresolvedImportId]?.trim()
     if (!periodKey) {
-      announce('Choisissez un mois au format AAAA-MM avant de valider cette ligne en attente.')
+      setPendingResolutionErrors((current) => ({
+        ...current,
+        [unresolvedImportId]: 'Choisissez un mois au format AAAA-MM avant d’ajouter cette ligne.'
+      }))
       return
     }
 
@@ -275,8 +303,21 @@ export default function App() {
         delete next[unresolvedImportId]
         return next
       })
+      setPendingResolutionErrors((current) => {
+        const next = { ...current }
+        delete next[unresolvedImportId]
+        return next
+      })
       announce('Ligne en attente resolue et ajoutee a la dette correspondante.')
     } catch (error) {
+      if (error instanceof Error && error.message.includes('periode valide')) {
+        setPendingResolutionErrors((current) => ({
+          ...current,
+          [unresolvedImportId]: error.message
+        }))
+        return
+      }
+
       announce(error instanceof Error ? error.message : 'Impossible de resoudre cette ligne en attente.')
     }
   }
@@ -307,7 +348,9 @@ export default function App() {
       setActiveImportResolutions([])
       setRememberedImportResolutions([])
       setPendingResolutionDrafts({})
+      setPendingResolutionErrors({})
       setLastImportOutcome(null)
+      setIsImportOutcomeCollapsed(false)
       announce('Sauvegarde restauree dans ce navigateur.')
       navigate('/')
     } catch (error) {
@@ -330,6 +373,8 @@ export default function App() {
       setActiveImportResolutions([])
       setRememberedImportResolutions([])
       setPendingResolutionDrafts({})
+      setPendingResolutionErrors({})
+      setIsImportOutcomeCollapsed(false)
       announce(
         blockingIssues.length > 0
           ? 'Corrections memorisees oubliees pour ce fichier. Certaines lignes redeviennent bloquantes.'
@@ -368,7 +413,9 @@ export default function App() {
               snapshot={snapshot}
               backupHealth={backupHealth}
               lastImportOutcome={lastImportOutcome}
-              onDismissImportOutcome={() => setLastImportOutcome(null)}
+              isImportOutcomeCollapsed={isImportOutcomeCollapsed}
+              onCollapseImportOutcome={() => setIsImportOutcomeCollapsed(true)}
+              onExpandImportOutcome={() => setIsImportOutcomeCollapsed(false)}
               onCreateBorrower={handleCreateBorrower}
             />
           }
@@ -382,6 +429,10 @@ export default function App() {
               onAddEntry={handleAddEntry}
               onToggleDebtClosed={(debtId, closed) => setDebtClosed(debtId, closed).then(() => announce(closed ? 'Dette cloturee.' : 'Dette rouverte.'))}
               onUpdateBorrowerNotes={(borrowerId, notes) => updateBorrowerNotes(borrowerId, notes).then(() => announce('Notes emprunteur enregistrees.'))}
+              pendingResolutionDrafts={pendingResolutionDrafts}
+              pendingResolutionErrors={pendingResolutionErrors}
+              onChangePendingResolution={handlePendingResolutionDraftChange}
+              onResolvePendingImport={handleResolvePendingImport}
             />
           }
         />
@@ -393,6 +444,10 @@ export default function App() {
               onAddEntry={handleAddEntry}
               onToggleDebtClosed={(debtId, closed) => setDebtClosed(debtId, closed).then(() => announce(closed ? 'Dette cloturee.' : 'Dette rouverte.'))}
               onUpdateDebtNotes={(debtId, notes) => updateDebtNotes(debtId, notes).then(() => announce('Notes de la dette enregistrees.'))}
+              pendingResolutionDrafts={pendingResolutionDrafts}
+              pendingResolutionErrors={pendingResolutionErrors}
+              onChangePendingResolution={handlePendingResolutionDraftChange}
+              onResolvePendingImport={handleResolvePendingImport}
             />
           }
         />
@@ -408,6 +463,7 @@ export default function App() {
               lastBackupAt={snapshot.lastBackupAt}
               unresolvedImports={snapshot.unresolvedImports}
               pendingResolutionDrafts={pendingResolutionDrafts}
+              pendingResolutionErrors={pendingResolutionErrors}
               rememberedImportResolutions={rememberedImportResolutions}
               storageStatus={storageStatus}
               onSelectImportWorkbook={handleImportWorkbookSelect}

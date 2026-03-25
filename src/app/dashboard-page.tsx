@@ -2,28 +2,44 @@ import { Link } from 'react-router-dom'
 import { useState } from 'react'
 import { formatDate, formatMoney } from '../domain/format'
 import { ledgerKindImpactCents } from '../domain/ledger'
-import type { AppSnapshot, BackupHealth, BorrowerView, RecentImportOutcome } from '../domain/types'
+import type { AppSnapshot, BackupHealth, BorrowerView, DebtView, RecentImportOutcome } from '../domain/types'
 import { MetricCard } from '../components/MetricCard'
+
+interface RecentPaymentRow {
+  payment: AppSnapshot['recentPayments'][number]
+  debtView: DebtView
+  isSettledDebt: boolean
+}
 
 interface DashboardPageProps {
   snapshot: AppSnapshot
   backupHealth: BackupHealth
   lastImportOutcome: RecentImportOutcome | null
-  onDismissImportOutcome: () => void
+  isImportOutcomeCollapsed: boolean
+  onCollapseImportOutcome: () => void
+  onExpandImportOutcome: () => void
   onCreateBorrower: (input: { name: string; notes?: string }) => Promise<void>
+}
+
+function isSettledBorrower(borrowerView: BorrowerView): boolean {
+  return borrowerView.debts.length > 0 && borrowerView.debts.every((debtView) => debtView.outstandingCents <= 0)
 }
 
 export function DashboardPage({
   snapshot,
   backupHealth,
   lastImportOutcome,
-  onDismissImportOutcome,
+  isImportOutcomeCollapsed,
+  onCollapseImportOutcome,
+  onExpandImportOutcome,
   onCreateBorrower
 }: DashboardPageProps) {
   const [name, setName] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [showProtectionDetails, setShowProtectionDetails] = useState(false)
+  const [borrowerHistoryMode, setBorrowerHistoryMode] = useState<'active' | 'settled'>('active')
+  const [paymentHistoryMode, setPaymentHistoryMode] = useState<'active' | 'settled'>('active')
   const lastImportPendingItems = lastImportOutcome
     ? snapshot.unresolvedImports.filter((item) => item.importSessionId === lastImportOutcome.sessionId)
     : []
@@ -37,6 +53,26 @@ export function DashboardPage({
     .filter((value): value is BorrowerView => Boolean(value))
   const highlightedBorrowers = affectedBorrowers.slice(0, 4)
   const hiddenBorrowerCount = Math.max(0, affectedBorrowers.length - highlightedBorrowers.length)
+  const activeBorrowers = snapshot.borrowers.filter((borrowerView) => !isSettledBorrower(borrowerView))
+  const settledBorrowers = snapshot.borrowers.filter(isSettledBorrower)
+  const visibleBorrowers = borrowerHistoryMode === 'settled' ? settledBorrowers : activeBorrowers
+  const recentPaymentRows = snapshot.recentPayments
+    .map((payment) => {
+      const debtView = snapshot.debtMap[payment.debtId]
+      if (!debtView) {
+        return null
+      }
+
+      return {
+        payment,
+        debtView,
+        isSettledDebt: debtView.outstandingCents <= 0
+      } satisfies RecentPaymentRow
+    })
+    .filter((value): value is RecentPaymentRow => value !== null)
+  const activePaymentRows = recentPaymentRows.filter((row) => !row.isSettledDebt)
+  const settledPaymentRows = recentPaymentRows.filter((row) => row.isSettledDebt)
+  const visiblePaymentRows = paymentHistoryMode === 'settled' ? settledPaymentRows : activePaymentRows
   const showFullProtectionPanel = backupHealth.state === 'backup_stale'
   const quietProtectionLabel =
     backupHealth.state === 'empty'
@@ -101,7 +137,7 @@ export function DashboardPage({
         </section>
       ) : null}
 
-      {lastImportOutcome ? (
+      {lastImportOutcome && !isImportOutcomeCollapsed ? (
         <section className="section-card">
           <div
             className={`notice-panel ${
@@ -118,7 +154,7 @@ export function DashboardPage({
                     : 'Import partiel complete: toutes les lignes connues sont maintenant integrees.'
                   : 'Import termine: les donnees sont visibles dans ce navigateur.'}
               </strong>
-              <button type="button" className="ghost-button" onClick={onDismissImportOutcome}>
+              <button type="button" className="ghost-button" onClick={onCollapseImportOutcome}>
                 Masquer ce resume
               </button>
             </div>
@@ -160,6 +196,29 @@ export function DashboardPage({
         </section>
       ) : null}
 
+      {lastImportOutcome && isImportOutcomeCollapsed ? (
+        <section className="section-card section-card-compact">
+          <div
+            className={`notice-panel notice-panel-compact ${
+              lastImportOutcome.mode === 'partial' && lastImportPendingCount > 0
+                ? 'notice-panel-warning'
+                : 'notice-panel-current'
+            }`}
+          >
+            <div className="notice-panel-header">
+              <strong>Resume d’import masque</strong>
+              <button type="button" className="ghost-button" onClick={onExpandImportOutcome}>
+                Reafficher le resume
+              </button>
+            </div>
+            <p className="section-note">
+              {lastImportOutcome.fileName} · {lastImportOutcome.appliedEntries} ligne(s) ajoutee(s)
+              {lastImportPendingCount > 0 ? ` · ${lastImportPendingCount} encore en attente` : ''}.
+            </p>
+          </div>
+        </section>
+      ) : null}
+
       <section className="section-card">
         <div className="section-heading">
           <div>
@@ -190,16 +249,47 @@ export function DashboardPage({
               <h2>Emprunteurs</h2>
             </div>
           </div>
+          {snapshot.borrowers.length > 0 ? (
+            <div className="compact-status-row">
+              <button
+                type="button"
+                className={borrowerHistoryMode === 'active' ? '' : 'ghost-button'}
+                aria-pressed={borrowerHistoryMode === 'active'}
+                onClick={() => setBorrowerHistoryMode('active')}
+              >
+                Emprunteurs actifs ({activeBorrowers.length})
+              </button>
+              <button
+                type="button"
+                className={borrowerHistoryMode === 'settled' ? '' : 'ghost-button'}
+                aria-pressed={borrowerHistoryMode === 'settled'}
+                onClick={() => setBorrowerHistoryMode('settled')}
+              >
+                Emprunteurs soldes ({settledBorrowers.length})
+              </button>
+            </div>
+          ) : null}
           <div className="list-stack">
             {snapshot.borrowers.length === 0 ? (
               <p className="empty-state">Aucun emprunteur pour le moment.</p>
+            ) : visibleBorrowers.length === 0 ? (
+              <p className="empty-state">
+                {borrowerHistoryMode === 'settled'
+                  ? 'Aucun emprunteur entierement solde pour le moment.'
+                  : 'Tous les emprunteurs avec dettes sont actuellement soldes. Ouvrez l’onglet emprunteurs soldes pour les revoir.'}
+              </p>
             ) : (
-              snapshot.borrowers.map((borrowerView) => (
+              visibleBorrowers.map((borrowerView) => (
                 <Link className="borrower-row" key={borrowerView.borrower.id} to={`/emprunteurs/${borrowerView.borrower.id}`}>
                   <div>
                     <strong>{borrowerView.borrower.name}</strong>
                     <p>
-                      {borrowerView.openDebtCount} dette(s) ouverte(s) · {formatMoney(borrowerView.totalPaidCents)} deja recu
+                      {borrowerView.debts.length === 0
+                        ? 'Aucune dette pour le moment'
+                        : isSettledBorrower(borrowerView)
+                          ? 'Toutes les dettes sont soldees'
+                          : `${borrowerView.openDebtCount} dette(s) ouverte(s)`}{' '}
+                      · {formatMoney(borrowerView.totalPaidCents)} deja recu
                     </p>
                   </div>
                   <strong>{formatMoney(borrowerView.outstandingCents)}</strong>
@@ -219,17 +309,46 @@ export function DashboardPage({
               Import & sauvegarde
             </Link>
           </div>
+          {recentPaymentRows.length > 0 ? (
+            <div className="compact-status-row">
+              <button
+                type="button"
+                className={paymentHistoryMode === 'active' ? '' : 'ghost-button'}
+                aria-pressed={paymentHistoryMode === 'active'}
+                onClick={() => setPaymentHistoryMode('active')}
+              >
+                Dettes encore ouvertes ({activePaymentRows.length})
+              </button>
+              <button
+                type="button"
+                className={paymentHistoryMode === 'settled' ? '' : 'ghost-button'}
+                aria-pressed={paymentHistoryMode === 'settled'}
+                onClick={() => setPaymentHistoryMode('settled')}
+              >
+                Dettes soldes ({settledPaymentRows.length})
+              </button>
+            </div>
+          ) : null}
           <div className="list-stack">
-            {snapshot.recentPayments.length === 0 ? (
+            {recentPaymentRows.length === 0 ? (
               <p className="empty-state">Aucun paiement enregistre.</p>
+            ) : visiblePaymentRows.length === 0 ? (
+              <p className="empty-state">
+                {paymentHistoryMode === 'settled'
+                  ? 'Aucun paiement recent sur une dette entierement soldee.'
+                  : 'Les paiements recents connus concernent uniquement des dettes deja soldees.'}
+              </p>
             ) : (
-              snapshot.recentPayments.map((payment) => (
-                <article className="activity-row" key={payment.id}>
+              visiblePaymentRows.map((row) => (
+                <article className="activity-row" key={row.payment.id}>
                   <div>
-                    <strong>{formatMoney(payment.amountCents)}</strong>
-                    <p>{payment.description || 'Paiement'}</p>
+                    <strong>{formatMoney(row.payment.amountCents)}</strong>
+                    <p>
+                      {row.debtView.borrower.name} · {row.debtView.debt.label}
+                    </p>
+                    <p>{row.payment.description || 'Paiement'}</p>
                   </div>
-                  <span>{formatDate(payment.occurredOn)}</span>
+                  <span>{formatDate(row.payment.occurredOn)}</span>
                 </article>
               ))
             )}
