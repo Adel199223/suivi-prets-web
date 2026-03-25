@@ -23,6 +23,9 @@ Canonical technical docs remain the source of truth if this guide becomes stale.
 3. Click `Enregistrer un paiement` or `Ajouter une avance`.
 4. Fill the amount and date if you have it.
 5. Verify that `Reste a encaisser` changed as expected.
+6. Open `Informations de la dette` to update the debt label or notes if needed.
+7. From the timeline, use `Modifier` to correct an existing line (amount/date/detail) or `Supprimer` to remove one.
+8. Use `Supprimer cette dette` in this view when you want the full debt and its lines removed.
 
 ## Terms in Plain English
 

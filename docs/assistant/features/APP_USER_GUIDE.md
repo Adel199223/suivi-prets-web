@@ -18,12 +18,14 @@ If this guide conflicts with technical docs, `APP_KNOWLEDGE.md` and source code 
 
 ## Quick Start (No Technical Background)
 
-1. Create an emprunteur.
-2. Add one or more dettes under that emprunteur.
-3. Record each payment as soon as it arrives.
-4. Open the import page, choose the `.ods` spreadsheet directly in the app, review the preview, then confirm the import.
-5. If one imported line is still missing a month, the safe data still becomes usable now and the flagged line waits separately until you complete it.
-6. Create an optional backup copy only before changing browser or device, or after a major session if you want an extra recovery file.
+1. Open the dashboard and create an emprunteur.
+2. Open that emprunteur page and create one or more dettes.
+3. Record each payment or avance on the debtor page or debt page.
+4. Open a debt page to check balance, then edit the debt label or notes if needed.
+5. Open an emprunteur page to update the borrower name/notes, or to delete a debt/borrower if you need cleanup.
+6. Open the import page, choose the `.ods` spreadsheet directly in the app, review the preview, then confirm the import.
+7. If one imported line is still missing a month, you can complete it later from unresolved import cards directly in the app (import page, debt page, or borrower page).
+8. Export a backup before changing browser/device, or after a major session if you want an extra recovery file.
 
 ## Terms in Plain English
 
@@ -40,3 +42,12 @@ If this guide conflicts with technical docs, `APP_KNOWLEDGE.md` and source code 
 3. Export a backup copy before changing browser, changing device, clearing browser data, or after a big session if you want extra protection.
 4. Read the restore summary before confirming, because restore replaces the current local data.
 5. If the import page shows one line still waiting, the safe data is already usable and only that flagged line stays outside the totals.
+
+## Edit and stop flow
+
+1. Correct a bad existing line directly from the debt view using `Modifier` (amount, date, detail).
+2. Use `Comment fermer ?` in the top bar for the local shutdown guidance.
+3. On Windows, close the local dev server with:
+   - `npm run stop:windows` (recommended), or
+   - `./scripts/stop-windows.ps1`
+4. A full local reset is available in Import & sauvegarde and permanently clears all local debtor, debt, line, and import-state data.
