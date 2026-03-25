@@ -10,6 +10,8 @@ npm run build
 npm test
 npm run validate:agent-docs
 npm run validate:workspace-hygiene
+.\scripts\start-windows.ps1
+npm run start:windows
 ```
 
 ## WSL-safe wrappers from this machine

@@ -10,17 +10,40 @@ Le code est public; vos données importées ne sont pas envoyées à GitHub. Ell
 
 - Windows 10/11
 - Node.js 20+ (ou version LTS)
-- npm
+- npm (inclus avec Node.js)
+- Git (pour Windows)
 
-### Lancer en local
+### Démarrage rapide (Windows - recommandé)
 
 ```powershell
 cd C:\chemin\vers\suivi-prets-web
-npm install
-npm run dev
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+.\scripts\start-windows.ps1
 ```
 
 Ouvrir [http://127.0.0.1:4173](http://127.0.0.1:4173).
+
+Si `Set-ExecutionPolicy` est bloqué par la stratégie de votre poste, exécutez :
+
+```powershell
+powershell -ExecutionPolicy Bypass -NoProfile -File .\scripts\start-windows.ps1
+```
+
+`start-windows.ps1` fait :
+
+- Vérifie que Node/npm/git sont installés
+- Installe les dépendances si elles manquent (`npm ci` ou `npm install`)
+- Vérifie si le port `4173` est déjà utilisé et peut le libérer
+- Avertit si Python n’est pas installé (non requis pour ouvrir l’app)
+- Ouvre automatiquement le navigateur sur `http://127.0.0.1:4173`
+
+`npm` et `node_modules` ne sont pas obligatoires au premier lancement avec `start-windows.ps1` : le script les installera si besoin.
+
+Commande ultra-courte :
+
+```powershell
+npm run start:windows
+```
 
 ### Commandes WSL (optionnel)
 
@@ -29,15 +52,16 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm install"
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run dev"
 ```
 
-## Import local
+### Import local (Windows)
 
-Le flux normal est d’importer un classeur `.ods` directement dans l’onglet **Import & sauvegarde**.
+Le flux normal de l'application est d’importer un classeur `.ods` directement dans **Import & sauvegarde**.  
+Vous n’avez pas besoin de Python pour utiliser l’app normale.
+
+La commande suivante reste optionnelle (outil de secours) et nécessite Python.
 
 ```powershell
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run import:preview -- --input /chemin/classeur.ods --output output/private/apercu.json"
 ```
-
-La commande ci-dessus reste un utilitaire opérateur de secours.
 
 ## Protection des données privées
 
