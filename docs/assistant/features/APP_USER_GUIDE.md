@@ -34,11 +34,18 @@ Si `4173` est déjà utilisé, le helper propose d’arrêter l’autre processu
 
 ### Mettre à jour l’app sur Windows
 
-Si le repo est déjà cloné sur le PC Windows :
+Si le repo est déjà cloné sur le PC Windows et qu’il s’agit déjà d’une version récente :
 
 ```powershell
 cd C:\chemin\vers\suivi-prets-web
 npm run update:windows
+```
+
+Si c’est une ancienne installation qui ne connaît pas encore `update:windows`, utilisez cette transition une seule fois :
+
+```powershell
+cd C:\chemin\vers\suivi-prets-web
+npm run stop:windows; git pull --ff-only; npm run update:windows
 ```
 
 Si le dossier n’est pas un vrai clone Git, il faut re-cloner depuis GitHub au lieu d’utiliser la mise à jour.
@@ -103,4 +110,4 @@ To stop it later: `npm run stop:windows`
 3. On Windows, close the local dev server with:
    - `npm run stop:windows` (recommended), or
    - `./scripts/stop-windows.ps1`
-4. A full local reset is available in Import & sauvegarde and permanently clears all local debtor, debt, line, and import-state data.
+4. A full local reset is available in `Réglages` and permanently clears all local borrower, debt, line, and import-state data.

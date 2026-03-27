@@ -42,6 +42,15 @@ npm run start:windows
 
 Si votre ami a déjà ce repo cloné sur son PC Windows, le bon réflexe est de mettre l'app à jour, pas de la réinstaller.
 
+Pour une installation déjà ancienne, utilisez d'abord cette transition une seule fois :
+
+```powershell
+cd C:\chemin\vers\suivi-prets-web
+npm run stop:windows; git pull --ff-only; npm run update:windows
+```
+
+Une fois cette transition faite, les mises à jour suivantes peuvent se faire avec :
+
 ```powershell
 cd C:\chemin\vers\suivi-prets-web
 npm run update:windows
