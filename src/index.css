@@ -693,6 +693,10 @@ h4 {
   align-items: start;
 }
 
+.debt-history-summary-grid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.95fr);
+}
+
 .borrower-row,
 .activity-row,
 .issue-row,
@@ -715,14 +719,12 @@ h4 {
   align-items: center;
 }
 
-.table-row-timeline {
+.debt-history-row {
   grid-template-columns:
-    minmax(96px, 1.05fr)
-    minmax(0, 2.8fr)
-    minmax(0, 1fr)
-    minmax(0, 0.85fr)
-    minmax(0, 1fr)
-    minmax(128px, 1fr);
+    minmax(108px, 0.88fr)
+    minmax(0, 1.65fr)
+    minmax(180px, 1.02fr)
+    minmax(148px, 0.92fr);
   align-items: start;
 }
 
@@ -879,20 +881,6 @@ h4 {
   color: var(--color-danger-text);
 }
 
-.table-action-button {
-  width: 100%;
-}
-
-.table-action-group {
-  display: grid;
-  gap: 0.5rem;
-  width: 100%;
-}
-
-.table-action-group .table-action-button {
-  width: 100%;
-}
-
 .ghost-button-inline {
   padding: 0.45rem 0.9rem;
   flex: 0 0 auto;
@@ -916,29 +904,74 @@ h4 {
   min-width: 0;
 }
 
-.table-cell-kind {
+.debt-history-row-head {
+  align-items: center;
+}
+
+.debt-history-heading {
+  min-width: 0;
+}
+
+.debt-history-kind {
   font-weight: 600;
 }
 
-.table-cell-detail {
+.debt-history-detail {
   overflow-wrap: anywhere;
   line-height: 1.55;
 }
 
-.table-cell-date,
-.table-cell-period,
-.table-cell-amount {
+.debt-history-meta {
+  min-width: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.debt-history-meta-item {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.debt-history-meta-label {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-eyebrow);
+}
+
+.debt-history-meta-value {
+  min-width: 0;
+  text-align: right;
+  color: var(--color-text-strong);
+}
+
+.debt-history-meta-item-date .debt-history-meta-value,
+.debt-history-meta-item-period .debt-history-meta-value,
+.debt-history-meta-item-amount .debt-history-meta-value {
   white-space: nowrap;
 }
 
-.table-cell-amount {
-  text-align: right;
+.debt-history-meta-item-amount .debt-history-meta-value {
   font-weight: 600;
 }
 
-.table-cell-actions {
+.debt-history-actions {
   align-self: stretch;
   overflow-wrap: normal;
+}
+
+.debt-history-action-group {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.debt-history-action-button {
+  width: 100%;
 }
 
 .button-row {
@@ -954,7 +987,7 @@ h4 {
 .metric-value,
 .borrower-row strong,
 .activity-row strong,
-.table-cell:last-child:not(.table-cell-actions) {
+.table-cell:last-child:not(.debt-history-actions) {
   overflow-wrap: anywhere;
 }
 
@@ -1277,13 +1310,31 @@ h4 {
     align-items: baseline;
   }
 
-  .table-cell-actions {
+  .debt-history-row {
+    grid-template-columns: 1fr;
+  }
+
+  .debt-history-meta {
+    display: grid;
+    gap: 0.6rem;
+  }
+
+  .debt-history-meta::before {
+    content: none;
+    display: none;
+  }
+
+  .debt-history-meta-item {
+    gap: 1rem;
+  }
+
+  .debt-history-actions {
     display: grid;
     gap: 0.55rem;
     align-items: stretch;
   }
 
-  .table-cell-actions .table-action-group {
+  .debt-history-action-group {
     width: 100%;
   }
 

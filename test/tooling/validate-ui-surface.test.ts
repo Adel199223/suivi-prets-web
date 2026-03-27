@@ -2,6 +2,7 @@ import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createArtifactPaths,
+  findHorizontalOrderIssue,
   getWindowsBrowserCandidates,
   launchValidationBrowser,
   parseCliArgs,
@@ -23,6 +24,27 @@ describe('validate-ui-surface helpers', () => {
     expect(paths.debtTimelineScreenshot).toBe(path.join(outputDir, 'ui-validation-debt-timeline.png'))
     expect(paths.desktopScreenshot).toBe(path.join(outputDir, 'ui-validation-desktop.png'))
     expect(paths.summary).toBe(path.join(outputDir, 'ui-validation-summary.json'))
+  })
+
+  it('reports no issue when measured boxes stay in order with a safe gap', () => {
+    expect(
+      findHorizontalOrderIssue([
+        { name: 'kind', left: 0, right: 80 },
+        { name: 'detail', left: 96, right: 240 },
+        { name: 'meta', left: 260, right: 380 },
+        { name: 'actions', left: 400, right: 520 }
+      ])
+    ).toBeNull()
+  })
+
+  it('reports a horizontal overlap when adjacent boxes crowd each other', () => {
+    expect(
+      findHorizontalOrderIssue([
+        { name: 'kind', left: 0, right: 110 },
+        { name: 'detail', left: 108, right: 240 },
+        { name: 'meta', left: 260, right: 380 }
+      ])
+    ).toContain('kind overlaps or crowds detail')
   })
 
   it('returns only bundled chromium on non-windows platforms', () => {

@@ -286,7 +286,7 @@ export function DebtPage({
       </section>
       </div>
 
-      <div className="split-grid">
+      <div className="split-grid debt-history-summary-grid">
         <section className="section-card">
           <div className="section-heading">
             <div>
@@ -301,27 +301,40 @@ export function DebtPage({
               </div>
             ) : (
               <>
-                <div className="table-row table-row-data table-row-timeline table-head">
-                  <span className="table-cell-kind">Type</span>
-                  <span className="table-cell-detail">Détail</span>
-                  <span className="table-cell-date">Date</span>
-                  <span className="table-cell-period">Période</span>
-                  <span className="table-cell-amount">Montant</span>
-                  <span className="table-cell-actions">Action</span>
+                <div className="table-row table-row-data debt-history-row debt-history-row-head table-head" data-testid="debt-history-head">
+                  <div className="debt-history-heading debt-history-kind" data-debt-history-head-part="kind">Type</div>
+                  <div className="debt-history-heading debt-history-detail" data-debt-history-head-part="detail">Détail</div>
+                  <div className="debt-history-heading debt-history-meta" data-debt-history-head-part="meta">Infos</div>
+                  <div className="debt-history-heading debt-history-actions" data-debt-history-head-part="actions">Actions</div>
                 </div>
                 {debtView.entries.map((entry) => (
                   <div className="list-stack" key={entry.id}>
-                    <div className="table-row table-row-data table-row-timeline">
-                      <span className="table-cell table-cell-kind" data-label="Type">{describeEntryKind(entry.kind)}</span>
-                      <span className="table-cell table-cell-detail" data-label="Détail">{entry.description || 'Aucun détail'}</span>
-                      <span className="table-cell table-cell-date" data-label="Date">{formatDate(entry.occurredOn)}</span>
-                      <span className="table-cell table-cell-period" data-label="Période">{entry.periodKey}</span>
-                      <span className="table-cell table-cell-amount" data-label="Montant">{formatMoney(entry.amountCents)}</span>
-                      <span className="table-cell table-cell-actions" data-label="Action">
-                        <span className="table-action-group">
+                    <div className="table-row table-row-data debt-history-row" data-testid="debt-history-row">
+                      <div className="table-cell debt-history-cell debt-history-kind" data-label="Type" data-debt-history-part="kind">
+                        {describeEntryKind(entry.kind)}
+                      </div>
+                      <div className="table-cell debt-history-cell debt-history-detail" data-label="Détail" data-debt-history-part="detail">
+                        {entry.description || 'Aucun détail'}
+                      </div>
+                      <div className="table-cell debt-history-cell debt-history-meta" data-label="Infos" data-debt-history-part="meta">
+                        <div className="debt-history-meta-item debt-history-meta-item-date">
+                          <span className="debt-history-meta-label">Date</span>
+                          <span className="debt-history-meta-value">{formatDate(entry.occurredOn)}</span>
+                        </div>
+                        <div className="debt-history-meta-item debt-history-meta-item-period">
+                          <span className="debt-history-meta-label">Période</span>
+                          <span className="debt-history-meta-value">{entry.periodKey}</span>
+                        </div>
+                        <div className="debt-history-meta-item debt-history-meta-item-amount">
+                          <span className="debt-history-meta-label">Montant</span>
+                          <span className="debt-history-meta-value">{formatMoney(entry.amountCents)}</span>
+                        </div>
+                      </div>
+                      <div className="table-cell debt-history-cell debt-history-actions" data-label="Actions" data-debt-history-part="actions">
+                        <div className="debt-history-action-group">
                           <button
                             type="button"
-                            className="ghost-button table-action-button"
+                            className="ghost-button debt-history-action-button"
                             aria-label={`Modifier la ligne ${describeEntryKind(entry.kind)} de ${formatMoney(entry.amountCents)}`}
                             onClick={() => startEditingEntry(entry)}
                           >
@@ -329,14 +342,14 @@ export function DebtPage({
                           </button>
                           <button
                             type="button"
-                            className="ghost-button danger-button table-action-button"
+                            className="ghost-button danger-button debt-history-action-button"
                             aria-label={`Supprimer la ligne ${describeEntryKind(entry.kind)} de ${formatMoney(entry.amountCents)}`}
                             onClick={() => void onDeleteEntry(entry.id)}
                           >
                             Supprimer
                           </button>
-                        </span>
-                      </span>
+                        </div>
+                      </div>
                     </div>
                     {editingEntryId === entry.id ? (
                       <div className="table-row">

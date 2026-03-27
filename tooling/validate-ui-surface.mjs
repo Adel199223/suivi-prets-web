@@ -43,6 +43,24 @@ export function summarizeLaunchError(error) {
   return error instanceof Error ? error.message : String(error)
 }
 
+export function findHorizontalOrderIssue(boxes, minimumGap = 8) {
+  for (const box of boxes) {
+    if (!box || typeof box.left !== 'number' || typeof box.right !== 'number') {
+      return 'one or more layout boxes could not be measured'
+    }
+  }
+
+  for (let index = 0; index < boxes.length - 1; index += 1) {
+    const current = boxes[index]
+    const next = boxes[index + 1]
+    if (current.right > next.left - minimumGap) {
+      return `${current.name} overlaps or crowds ${next.name}`
+    }
+  }
+
+  return null
+}
+
 export async function launchValidationBrowser({
   platform = process.platform,
   chromiumLauncher = chromium
@@ -205,6 +223,17 @@ export async function runBrowserValidation({ baseUrl, outputDir }) {
     const desktopContext = await browser.newContext({ viewport: { width: 1440, height: 900 } })
     await desktopContext.tracing.start({ screenshots: true, snapshots: true })
     const page = await desktopContext.newPage()
+    const toHorizontalBox = async (locator, name) => {
+      const box = await locator.boundingBox()
+      if (!box) {
+        throw new Error(`Debt history ${name} box could not be measured.`)
+      }
+      return {
+        name,
+        left: box.x,
+        right: box.x + box.width
+      }
+    }
     await page.goto(baseUrl, { waitUntil: 'networkidle', timeout: 20_000 })
     await page.getByLabel('Nom').fill('Validation UI')
     await page.getByRole('button', { name: /créer l’emprunteur/i }).click()
@@ -223,6 +252,37 @@ export async function runBrowserValidation({ baseUrl, outputDir }) {
     await page.getByRole('button', { name: /valider le paiement/i }).click()
     await page.getByText(/VIR RECU VALIDATION DEBT TIMELINE DETAIL LONG/i).waitFor()
     await page.screenshot({ path: artifacts.debtTimelineScreenshot, fullPage: true })
+    const debtHistoryHead = page.getByTestId('debt-history-head')
+    const firstDebtHistoryRow = page.getByTestId('debt-history-row').first()
+    await debtHistoryHead.waitFor()
+    await firstDebtHistoryRow.waitFor()
+
+    const headerIssue = findHorizontalOrderIssue(
+      await Promise.all([
+        toHorizontalBox(debtHistoryHead.locator('[data-debt-history-head-part="kind"]'), 'header kind'),
+        toHorizontalBox(debtHistoryHead.locator('[data-debt-history-head-part="detail"]'), 'header detail'),
+        toHorizontalBox(debtHistoryHead.locator('[data-debt-history-head-part="meta"]'), 'header meta'),
+        toHorizontalBox(debtHistoryHead.locator('[data-debt-history-head-part="actions"]'), 'header actions')
+      ]),
+      10
+    )
+    if (headerIssue) {
+      throw new Error(`Debt history header layout issue: ${headerIssue}.`)
+    }
+
+    const rowIssue = findHorizontalOrderIssue(
+      await Promise.all([
+        toHorizontalBox(firstDebtHistoryRow.locator('[data-debt-history-part="kind"]'), 'row kind'),
+        toHorizontalBox(firstDebtHistoryRow.locator('[data-debt-history-part="detail"]'), 'row detail'),
+        toHorizontalBox(firstDebtHistoryRow.locator('[data-debt-history-part="meta"]'), 'row meta'),
+        toHorizontalBox(firstDebtHistoryRow.locator('[data-debt-history-part="actions"]'), 'row actions')
+      ]),
+      10
+    )
+    if (rowIssue) {
+      throw new Error(`Debt history row layout issue: ${rowIssue}.`)
+    }
+
     await page.getByRole('link', { name: /import & sauvegarde/i }).click()
     await page.getByRole('heading', { name: /importer un classeur/i }).waitFor()
     await page.getByRole('button', { name: /ouvrir les réglages/i }).click()
@@ -235,6 +295,7 @@ export async function runBrowserValidation({ baseUrl, outputDir }) {
       { name: 'borrower flow visible', status: 'passed' },
       { name: 'debt flow visible', status: 'passed' },
       { name: 'debt timeline visible', status: 'passed' },
+      { name: 'debt timeline layout stable', status: 'passed' },
       { name: 'import page visible', status: 'passed' },
       { name: 'settings drawer visible', status: 'passed' },
       { name: 'dark mode toggle visible', status: 'passed' }
