@@ -18,6 +18,59 @@ If this guide conflicts with technical docs, `APP_KNOWLEDGE.md` and source code 
 
 ## Quick Start (No Technical Background)
 
+### Installer l’app depuis GitHub sur Windows
+
+Lien du repo : `https://github.com/Adel199223/suivi-prets-web`
+
+```powershell
+cd $HOME\Documents
+git clone https://github.com/Adel199223/suivi-prets-web.git
+cd suivi-prets-web
+npm run start:windows
+```
+
+Aucune installation Ubuntu/WSL ou Python n’est requise. L’app s’ouvre localement dans le navigateur et garde les données dans ce navigateur sur cet appareil. Pour l’arrêter plus tard : `npm run stop:windows`.
+Si `4173` est déjà utilisé, le helper propose d’arrêter l’autre processus. Si vous refusez, le lancement s’arrête proprement et il faut fermer l’autre app puis relancer `npm run start:windows`.
+
+### Mettre à jour l’app sur Windows
+
+Si le repo est déjà cloné sur le PC Windows :
+
+```powershell
+cd C:\chemin\vers\suivi-prets-web
+npm run update:windows
+```
+
+Si le dossier n’est pas un vrai clone Git, il faut re-cloner depuis GitHub au lieu d’utiliser la mise à jour.
+
+### Message prêt à envoyer
+
+Français
+
+Git et Node.js doivent être installés. Pas besoin d’Ubuntu/WSL ni de Python.
+
+```powershell
+cd $HOME\Documents
+git clone https://github.com/Adel199223/suivi-prets-web.git
+cd suivi-prets-web
+npm run start:windows
+```
+
+Pour arrêter plus tard : `npm run stop:windows`
+
+English
+
+Git and Node.js must be installed. No Ubuntu/WSL and no Python are needed.
+
+```powershell
+cd $HOME\Documents
+git clone https://github.com/Adel199223/suivi-prets-web.git
+cd suivi-prets-web
+npm run start:windows
+```
+
+To stop it later: `npm run stop:windows`
+
 1. Open the dashboard and create an emprunteur.
 2. Open that emprunteur page and create one or more dettes.
 3. Record each payment or avance on the debtor page or debt page.
@@ -46,7 +99,7 @@ If this guide conflicts with technical docs, `APP_KNOWLEDGE.md` and source code 
 ## Edit and stop flow
 
 1. Correct a bad existing line directly from the debt view using `Modifier` (amount, date, detail).
-2. Use `Comment fermer ?` in the top bar for the local shutdown guidance.
+2. Use `Réglages` in the top bar for the local shutdown guidance.
 3. On Windows, close the local dev server with:
    - `npm run stop:windows` (recommended), or
    - `./scripts/stop-windows.ps1`

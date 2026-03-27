@@ -43,6 +43,7 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:ui"
 - Use targeted tests first.
 - Use the repo-owned browser harness second.
 - `npm run validate:ui` should build the app, start the local preview server on `http://127.0.0.1:4173`, wait for readiness, and then capture desktop and mobile artifacts under `output/playwright/`.
+- On Windows, if Playwright bundled Chromium cannot launch, the repo-owned validator may automatically fall back to installed Edge and then installed Chrome before failing.
 - If `--base-url` is passed, treat that target as already running and fail clearly if it never becomes reachable.
 - Capture desktop and mobile screenshots plus a JSON summary under `output/playwright/`.
 - If a broad browser pass is not available, use the narrower harness path and document the caveat.
