@@ -32,10 +32,10 @@ function Get-PortListeners {
 
 Push-Location (Join-Path $PSScriptRoot '..')
 try {
-  Write-Step "Stopping Suivi Prets on port $Port if it is running."
+  Write-Step "Stopping Suivi Prêts on port $Port if it is running."
 
-  if (-not (Test-Path '.git')) {
-    Fail "This folder does not look like this repository root. Run from the repo root and retry."
+  if (-not (Test-Path 'package.json')) {
+    Fail "This folder does not look like the repo root. Open the repo folder and retry."
   }
 
   $listeners = @(Get-PortListeners -Port $Port)
@@ -61,7 +61,7 @@ try {
     Fail "Port $Port is still in use by process ID(s): $($remainingPids -join ', ')"
   }
 
-  Write-Step "Suivi Prets is now stopped on port $Port."
+  Write-Step "Suivi Prêts is now stopped on port $Port."
 } finally {
   Pop-Location
 }

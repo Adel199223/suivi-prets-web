@@ -25,6 +25,65 @@ export function createArtifactPaths(outputDir) {
   }
 }
 
+export function getWindowsBrowserCandidates(platform = process.platform) {
+  const bundled = [{ engine: 'chromium', channel: null, label: 'bundled-chromium' }]
+  if (platform !== 'win32') {
+    return bundled
+  }
+
+  return [
+    ...bundled,
+    { engine: 'chromium', channel: 'msedge', label: 'edge-channel' },
+    { engine: 'chromium', channel: 'chrome', label: 'chrome-channel' }
+  ]
+}
+
+export function summarizeLaunchError(error) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+export async function launchValidationBrowser({
+  platform = process.platform,
+  chromiumLauncher = chromium
+} = {}) {
+  const candidates = getWindowsBrowserCandidates(platform)
+  const browserAttempts = []
+
+  for (const candidate of candidates) {
+    try {
+      const browser = await chromiumLauncher.launch({
+        headless: true,
+        ...(candidate.channel ? { channel: candidate.channel } : {})
+      })
+
+      browserAttempts.push({
+        ...candidate,
+        status: 'passed'
+      })
+
+      return {
+        browser,
+        browserInfo: candidate,
+        browserAttempts
+      }
+    } catch (error) {
+      browserAttempts.push({
+        ...candidate,
+        status: 'failed',
+        reason: summarizeLaunchError(error)
+      })
+    }
+  }
+
+  const combinedReasons = browserAttempts
+    .map((attempt) => `${attempt.label}: ${attempt.reason}`)
+    .join('; ')
+
+  const launchError = new Error(`Unable to launch a validation browser on ${platform}. ${combinedReasons}`)
+  launchError.browserAttempts = browserAttempts
+  throw launchError
+}
+
 export function parseCliArgs(argv = process.argv.slice(2)) {
   let baseUrl = DEFAULT_BASE_URL
   let outputDir = path.join(DEFAULT_ROOT_DIR, 'output', 'playwright')
@@ -132,39 +191,54 @@ export async function runBrowserValidation({ baseUrl, outputDir }) {
   const artifacts = createArtifactPaths(outputDir)
   const checks = []
   const startedAt = new Date().toISOString()
-  const browser = await chromium.launch({ headless: true })
+  let browser = null
+  let browserInfo = null
+  let browserAttempts = []
 
   try {
+    const launchedBrowser = await launchValidationBrowser()
+    browser = launchedBrowser.browser
+    browserInfo = launchedBrowser.browserInfo
+    browserAttempts = launchedBrowser.browserAttempts
+
     const desktopContext = await browser.newContext({ viewport: { width: 1440, height: 900 } })
     await desktopContext.tracing.start({ screenshots: true, snapshots: true })
     const page = await desktopContext.newPage()
     await page.goto(baseUrl, { waitUntil: 'networkidle', timeout: 20_000 })
     await page.getByLabel('Nom').fill('Validation UI')
-    await page.getByRole('button', { name: /creer l’emprunteur/i }).click()
+    await page.getByRole('button', { name: /créer l’emprunteur/i }).click()
     await page.getByRole('heading', { name: 'Validation UI' }).waitFor()
-    await page.getByLabel('Libelle').fill('Dette test')
+    await page.getByLabel('Libellé').fill('Dette test')
     await page.getByLabel('Solde initial (€)').fill('900')
-    await page.getByLabel('Date precise dette').fill('2026-03-01')
-    await page.getByRole('button', { name: /creer la dette/i }).click()
+    await page.getByLabel('Date précise dette').fill('2026-03-01')
+    await page.getByRole('button', { name: /créer la dette/i }).click()
     await page.getByRole('heading', { name: 'Dette test', level: 1 }).waitFor()
     await page.getByRole('button', { name: /enregistrer un paiement/i }).click()
     await page.getByLabel('Montant (€)').fill('100')
-    await page.getByLabel('Date precise').fill('2026-03-15')
+    await page.getByLabel('Date précise').fill('2026-03-15')
     await page.getByRole('button', { name: /valider le paiement/i }).click()
     await page.getByRole('link', { name: /import & sauvegarde/i }).click()
-    await page.getByRole('heading', { name: /protection des donnees/i }).waitFor()
+    await page.getByRole('heading', { name: /importer un classeur/i }).waitFor()
+    await page.getByRole('button', { name: /ouvrir les réglages/i }).click()
+    await page.getByRole('dialog', { name: /réglages/i }).waitFor()
+    await page.getByRole('button', { name: /^sombre$/i }).click()
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark')
     await page.screenshot({ path: artifacts.desktopScreenshot, fullPage: true })
     await desktopContext.tracing.stop({ path: artifacts.trace })
     checks.push(
       { name: 'borrower flow visible', status: 'passed' },
       { name: 'debt flow visible', status: 'passed' },
-      { name: 'import page visible', status: 'passed' }
+      { name: 'import page visible', status: 'passed' },
+      { name: 'settings drawer visible', status: 'passed' },
+      { name: 'dark mode toggle visible', status: 'passed' }
     )
     await desktopContext.close()
 
     const mobileContext = await browser.newContext({ ...devices['iPhone 13'] })
     const mobilePage = await mobileContext.newPage()
     await mobilePage.goto(baseUrl, { waitUntil: 'networkidle', timeout: 20_000 })
+    await mobilePage.getByRole('button', { name: /ouvrir les réglages/i }).click()
+    await mobilePage.getByRole('dialog', { name: /réglages/i }).waitFor()
     await mobilePage.screenshot({ path: artifacts.mobileScreenshot, fullPage: true })
     await mobileContext.close()
 
@@ -173,26 +247,37 @@ export async function runBrowserValidation({ baseUrl, outputDir }) {
       startedAt,
       finishedAt: new Date().toISOString(),
       status: 'passed',
+      browser: browserInfo,
+      browserAttempts,
       checks,
       artifacts
     }
     await fs.writeFile(artifacts.summary, JSON.stringify(summary, null, 2))
     return summary
   } catch (error) {
-    const failureContext = await browser.newContext({ viewport: { width: 1280, height: 800 } })
-    const failurePage = await failureContext.newPage()
-    try {
-      await failurePage.goto(baseUrl, { waitUntil: 'networkidle', timeout: 10_000 })
-      await failurePage.screenshot({ path: artifacts.failureScreenshot, fullPage: true })
-    } catch {
-      // Ignore screenshot fallback failure.
+    if (Array.isArray(error?.browserAttempts) && error.browserAttempts.length > 0) {
+      browserAttempts = error.browserAttempts
     }
-    await failureContext.close()
+
+    if (browser) {
+      const failureContext = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+      const failurePage = await failureContext.newPage()
+      try {
+        await failurePage.goto(baseUrl, { waitUntil: 'networkidle', timeout: 10_000 })
+        await failurePage.screenshot({ path: artifacts.failureScreenshot, fullPage: true })
+      } catch {
+        // Ignore screenshot fallback failure.
+      }
+      await failureContext.close()
+    }
+
     const summary = {
       baseUrl,
       startedAt,
       finishedAt: new Date().toISOString(),
       status: 'failed',
+      browser: browserInfo,
+      browserAttempts,
       checks,
       artifacts,
       error: error instanceof Error ? error.message : String(error)
@@ -200,7 +285,9 @@ export async function runBrowserValidation({ baseUrl, outputDir }) {
     await fs.writeFile(artifacts.summary, JSON.stringify(summary, null, 2))
     throw error
   } finally {
-    await browser.close()
+    if (browser) {
+      await browser.close()
+    }
   }
 }
 

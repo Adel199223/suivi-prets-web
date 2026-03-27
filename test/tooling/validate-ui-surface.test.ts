@@ -2,6 +2,8 @@ import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createArtifactPaths,
+  getWindowsBrowserCandidates,
+  launchValidationBrowser,
   parseCliArgs,
   runUiValidation,
   waitForBaseUrl
@@ -20,6 +22,18 @@ describe('validate-ui-surface helpers', () => {
     const paths = createArtifactPaths(outputDir)
     expect(paths.desktopScreenshot).toBe(path.join(outputDir, 'ui-validation-desktop.png'))
     expect(paths.summary).toBe(path.join(outputDir, 'ui-validation-summary.json'))
+  })
+
+  it('returns only bundled chromium on non-windows platforms', () => {
+    expect(getWindowsBrowserCandidates('linux')).toEqual([{ engine: 'chromium', channel: null, label: 'bundled-chromium' }])
+  })
+
+  it('returns bundled chromium then Edge and Chrome on Windows', () => {
+    expect(getWindowsBrowserCandidates('win32')).toEqual([
+      { engine: 'chromium', channel: null, label: 'bundled-chromium' },
+      { engine: 'chromium', channel: 'msedge', label: 'edge-channel' },
+      { engine: 'chromium', channel: 'chrome', label: 'chrome-channel' }
+    ])
   })
 
   it('waits until a base URL becomes reachable', async () => {
@@ -101,5 +115,77 @@ describe('validate-ui-surface helpers', () => {
         'Base URL http://localhost:5000 did not become reachable. Start the target server first or omit --base-url to let validate:ui build and preview the app automatically.'
     })
     expect(stopCommandFn).not.toHaveBeenCalled()
+  })
+
+  it('falls back to Edge on Windows when bundled Chromium fails to launch', async () => {
+    const launch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('browserType.launch: bundled chromium failed'))
+      .mockResolvedValueOnce({ close: vi.fn() })
+
+    const result = await launchValidationBrowser({
+      platform: 'win32',
+      chromiumLauncher: { launch }
+    })
+
+    expect(launch).toHaveBeenNthCalledWith(1, { headless: true })
+    expect(launch).toHaveBeenNthCalledWith(2, { headless: true, channel: 'msedge' })
+    expect(result.browserInfo).toEqual({ engine: 'chromium', channel: 'msedge', label: 'edge-channel' })
+    expect(result.browserAttempts).toEqual([
+      { engine: 'chromium', channel: null, label: 'bundled-chromium', status: 'failed', reason: 'browserType.launch: bundled chromium failed' },
+      { engine: 'chromium', channel: 'msedge', label: 'edge-channel', status: 'passed' }
+    ])
+  })
+
+  it('falls back to Chrome on Windows when Chromium and Edge fail', async () => {
+    const launch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('browserType.launch: bundled chromium failed'))
+      .mockRejectedValueOnce(new Error('browserType.launch: edge failed'))
+      .mockResolvedValueOnce({ close: vi.fn() })
+
+    const result = await launchValidationBrowser({
+      platform: 'win32',
+      chromiumLauncher: { launch }
+    })
+
+    expect(launch).toHaveBeenNthCalledWith(3, { headless: true, channel: 'chrome' })
+    expect(result.browserInfo).toEqual({ engine: 'chromium', channel: 'chrome', label: 'chrome-channel' })
+    expect(result.browserAttempts[1]).toEqual({
+      engine: 'chromium',
+      channel: 'msedge',
+      label: 'edge-channel',
+      status: 'failed',
+      reason: 'browserType.launch: edge failed'
+    })
+  })
+
+  it('does not fall back when bundled Chromium launches successfully', async () => {
+    const launch = vi.fn().mockResolvedValue({ close: vi.fn() })
+
+    const result = await launchValidationBrowser({
+      platform: 'win32',
+      chromiumLauncher: { launch }
+    })
+
+    expect(launch).toHaveBeenCalledTimes(1)
+    expect(result.browserInfo).toEqual({ engine: 'chromium', channel: null, label: 'bundled-chromium' })
+  })
+
+  it('throws a combined error when all Windows browser launch attempts fail', async () => {
+    const launch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('browserType.launch: bundled chromium failed'))
+      .mockRejectedValueOnce(new Error('browserType.launch: edge failed'))
+      .mockRejectedValueOnce(new Error('browserType.launch: chrome failed'))
+
+    await expect(
+      launchValidationBrowser({
+        platform: 'win32',
+        chromiumLauncher: { launch }
+      })
+    ).rejects.toThrow(
+      'Unable to launch a validation browser on win32. bundled-chromium: browserType.launch: bundled chromium failed; edge-channel: browserType.launch: edge failed; chrome-channel: browserType.launch: chrome failed'
+    )
   })
 })
