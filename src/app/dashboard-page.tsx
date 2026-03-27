@@ -7,7 +7,7 @@ import type { AppSnapshot, BackupHealth, BorrowerView, DebtView, RecentImportOut
 import { MetricCard } from '../components/MetricCard'
 
 interface RecentPaymentRow {
-  payment: AppSnapshot['recentPayments'][number]
+  payment: AppSnapshot['paymentHistory'][number]
   debtView: DebtView
   isSettledDebt: boolean
 }
@@ -69,7 +69,7 @@ export function DashboardPage({
       : borrowerHistoryMode === 'settled'
         ? settledBorrowers
         : activeBorrowers
-  const recentPaymentRows = snapshot.recentPayments
+  const recentPaymentRows = snapshot.paymentHistory
     .map((payment) => {
       const debtView = snapshot.debtMap[payment.debtId]
       if (!debtView) {

@@ -34,6 +34,7 @@ TEXT_SPACE_COUNT = f"{{{NS['text']}}}c"
 RELEVANT_PREFIX = re.compile(r"^dette[_\s-]?", re.IGNORECASE)
 PERIOD_KEY_PATTERN = re.compile(r"^\d{4}-\d{2}$")
 ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+OPERATION_DATE_COLUMN_INDEX = 6
 
 
 def normalize_whitespace(value: str) -> str:
@@ -150,15 +151,28 @@ def extract_text_content(node: ET.Element) -> str:
     return "".join(pieces)
 
 
-def extract_cell_value(cell: ET.Element) -> str:
+def extract_rendered_cell_value(cell: ET.Element) -> str:
     paragraphs = [normalize_whitespace(extract_text_content(node)) for node in cell.findall(".//text:p", NS)]
-    rendered = " ".join(part for part in paragraphs if part)
+    return " ".join(part for part in paragraphs if part)
+
+
+def extract_cell_value(cell: ET.Element, column_index: int) -> str:
+    rendered = extract_rendered_cell_value(cell)
+    value_type = cell.attrib.get(VALUE_TYPE)
+    date_value = cell.attrib.get(DATE_VALUE) if value_type == "date" else None
+
+    # LibreOffice can store the month column as a structured date while still rendering
+    # a workbook-family label like "XX/03/2026". Preserve that visible text everywhere
+    # except the explicit operation-date column, where the ISO backing value is safer.
+    if column_index == OPERATION_DATE_COLUMN_INDEX and date_value:
+        return date_value
+
     if rendered:
         return rendered
 
-    value_type = cell.attrib.get(VALUE_TYPE)
-    if value_type == "date" and DATE_VALUE in cell.attrib:
-        return cell.attrib[DATE_VALUE]
+    if date_value:
+        return date_value
+
     if VALUE_ATTR in cell.attrib:
         return cell.attrib[VALUE_ATTR]
     return ""
@@ -195,8 +209,10 @@ def load_workbook_rows(path: Path) -> tuple[bytes, dict[str, list[list[str]]]]:
                     continue
 
                 repeated_cells = int(cell.attrib.get(COL_REPEAT, "1"))
-                value = "" if cell.tag == COVERED_TABLE_CELL else extract_cell_value(cell)
-                row_values.extend([value] * repeated_cells)
+                for _ in range(repeated_cells):
+                    column_index = len(row_values)
+                    value = "" if cell.tag == COVERED_TABLE_CELL else extract_cell_value(cell, column_index)
+                    row_values.append(value)
 
             trimmed = trim_row(row_values)
             if not trimmed:

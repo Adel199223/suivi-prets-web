@@ -19,6 +19,7 @@ const NS = {
 }
 
 const RELEVANT_PREFIX = /^dette[_\s-]?/i
+const OPERATION_DATE_COLUMN_INDEX = 6
 
 type SheetRows = Record<string, string[][]>
 type ImportResolutionMap = Map<string, ImportIssueResolution>
@@ -217,21 +218,34 @@ function extractTextContent(node: Node): string {
   return Array.from(element.childNodes).map(extractTextContent).join('')
 }
 
-function extractCellValue(cell: Element): string {
+function extractRenderedCellValue(cell: Element): string {
   const paragraphs = Array.from(cell.getElementsByTagNameNS(NS.text, 'p'))
     .map((node) => normalizeWhitespace(extractTextContent(node)))
     .filter(Boolean)
-  const rendered = paragraphs.join(' ')
+  return paragraphs.join(' ')
+}
+
+function extractCellValue(cell: Element, columnIndex: number): string {
+  const rendered = extractRenderedCellValue(cell)
+  const valueType = getAttr(cell, NS.office, 'value-type', 'office:value-type')
+  const dateValue =
+    valueType === 'date'
+      ? getAttr(cell, NS.office, 'date-value', 'office:date-value')
+      : null
+
+  // LibreOffice can store the month column as a structured date while still rendering
+  // a workbook-family label like "XX/03/2026". Preserve that visible text everywhere
+  // except the explicit operation-date column, where the ISO backing value is safer.
+  if (columnIndex === OPERATION_DATE_COLUMN_INDEX && dateValue) {
+    return dateValue
+  }
+
   if (rendered) {
     return rendered
   }
 
-  const valueType = getAttr(cell, NS.office, 'value-type', 'office:value-type')
-  if (valueType === 'date') {
-    const dateValue = getAttr(cell, NS.office, 'date-value', 'office:date-value')
-    if (dateValue) {
-      return dateValue
-    }
+  if (dateValue) {
+    return dateValue
   }
 
   return getAttr(cell, NS.office, 'value', 'office:value') ?? ''
@@ -284,8 +298,9 @@ function loadWorkbookRows(buffer: Uint8Array): SheetRows {
         }
 
         const repeatedCells = Number.parseInt(getAttr(cell, NS.table, 'number-columns-repeated', 'table:number-columns-repeated') ?? '1', 10)
-        const value = cell.localName === 'covered-table-cell' ? '' : extractCellValue(cell)
         for (let index = 0; index < repeatedCells; index += 1) {
+          const columnIndex = rowValues.length
+          const value = cell.localName === 'covered-table-cell' ? '' : extractCellValue(cell, columnIndex)
           rowValues.push(value)
         }
       }

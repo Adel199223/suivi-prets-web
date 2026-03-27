@@ -17,6 +17,7 @@ export function getPackageManagerCommand(platform = process.platform) {
 
 export function createArtifactPaths(outputDir) {
   return {
+    debtTimelineScreenshot: path.join(outputDir, 'ui-validation-debt-timeline.png'),
     desktopScreenshot: path.join(outputDir, 'ui-validation-desktop.png'),
     mobileScreenshot: path.join(outputDir, 'ui-validation-mobile.png'),
     summary: path.join(outputDir, 'ui-validation-summary.json'),
@@ -216,7 +217,12 @@ export async function runBrowserValidation({ baseUrl, outputDir }) {
     await page.getByRole('button', { name: /enregistrer un paiement/i }).click()
     await page.getByLabel('Montant (€)').fill('100')
     await page.getByLabel('Date précise').fill('2026-03-15')
+    await page
+      .getByLabel('Detail')
+      .fill('VIR RECU VALIDATION DEBT TIMELINE DETAIL LONG POUR VERIFIER LA MISE EN PAGE DES COLONNES ET DES ACTIONS')
     await page.getByRole('button', { name: /valider le paiement/i }).click()
+    await page.getByText(/VIR RECU VALIDATION DEBT TIMELINE DETAIL LONG/i).waitFor()
+    await page.screenshot({ path: artifacts.debtTimelineScreenshot, fullPage: true })
     await page.getByRole('link', { name: /import & sauvegarde/i }).click()
     await page.getByRole('heading', { name: /importer un classeur/i }).waitFor()
     await page.getByRole('button', { name: /ouvrir les réglages/i }).click()
@@ -228,6 +234,7 @@ export async function runBrowserValidation({ baseUrl, outputDir }) {
     checks.push(
       { name: 'borrower flow visible', status: 'passed' },
       { name: 'debt flow visible', status: 'passed' },
+      { name: 'debt timeline visible', status: 'passed' },
       { name: 'import page visible', status: 'passed' },
       { name: 'settings drawer visible', status: 'passed' },
       { name: 'dark mode toggle visible', status: 'passed' }

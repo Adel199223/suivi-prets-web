@@ -716,7 +716,14 @@ h4 {
 }
 
 .table-row-timeline {
-  grid-template-columns: minmax(120px, 1.1fr) minmax(160px, 1.5fr) repeat(3, minmax(0, 1fr)) auto;
+  grid-template-columns:
+    minmax(96px, 1.05fr)
+    minmax(0, 2.8fr)
+    minmax(0, 1fr)
+    minmax(0, 0.85fr)
+    minmax(0, 1fr)
+    minmax(128px, 1fr);
+  align-items: start;
 }
 
 .table-row-summary {
@@ -877,13 +884,13 @@ h4 {
 }
 
 .table-action-group {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 0.5rem;
+  width: 100%;
 }
 
 .table-action-group .table-action-button {
-  width: auto;
+  width: 100%;
 }
 
 .ghost-button-inline {
@@ -909,6 +916,31 @@ h4 {
   min-width: 0;
 }
 
+.table-cell-kind {
+  font-weight: 600;
+}
+
+.table-cell-detail {
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+
+.table-cell-date,
+.table-cell-period,
+.table-cell-amount {
+  white-space: nowrap;
+}
+
+.table-cell-amount {
+  text-align: right;
+  font-weight: 600;
+}
+
+.table-cell-actions {
+  align-self: stretch;
+  overflow-wrap: normal;
+}
+
 .button-row {
   flex-wrap: wrap;
 }
@@ -922,7 +954,7 @@ h4 {
 .metric-value,
 .borrower-row strong,
 .activity-row strong,
-.table-cell:last-child {
+.table-cell:last-child:not(.table-cell-actions) {
   overflow-wrap: anywhere;
 }
 
@@ -1243,6 +1275,16 @@ h4 {
     justify-content: space-between;
     gap: 1rem;
     align-items: baseline;
+  }
+
+  .table-cell-actions {
+    display: grid;
+    gap: 0.55rem;
+    align-items: stretch;
+  }
+
+  .table-cell-actions .table-action-group {
+    width: 100%;
   }
 
   .table-cell::before {

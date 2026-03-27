@@ -269,6 +269,7 @@ export interface AppSnapshot {
   totalPaidCents: number
   totalAdjustmentCents: number
   outstandingCents: number
+  paymentHistory: LedgerEntryRecord[]
   recentPayments: LedgerEntryRecord[]
   importSessions: ImportSessionRecord[]
   lastBackupAt: string | null

@@ -20,6 +20,7 @@ describe('validate-ui-surface helpers', () => {
   it('creates deterministic artifact paths', () => {
     const outputDir = path.join('tmp', 'out')
     const paths = createArtifactPaths(outputDir)
+    expect(paths.debtTimelineScreenshot).toBe(path.join(outputDir, 'ui-validation-debt-timeline.png'))
     expect(paths.desktopScreenshot).toBe(path.join(outputDir, 'ui-validation-desktop.png'))
     expect(paths.summary).toBe(path.join(outputDir, 'ui-validation-summary.json'))
   })

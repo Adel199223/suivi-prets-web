@@ -302,22 +302,22 @@ export function DebtPage({
             ) : (
               <>
                 <div className="table-row table-row-data table-row-timeline table-head">
-                  <span>Type</span>
-                  <span>Détail</span>
-                  <span>Date</span>
-                  <span>Période</span>
-                  <span>Montant</span>
-                  <span>Action</span>
+                  <span className="table-cell-kind">Type</span>
+                  <span className="table-cell-detail">Détail</span>
+                  <span className="table-cell-date">Date</span>
+                  <span className="table-cell-period">Période</span>
+                  <span className="table-cell-amount">Montant</span>
+                  <span className="table-cell-actions">Action</span>
                 </div>
                 {debtView.entries.map((entry) => (
                   <div className="list-stack" key={entry.id}>
                     <div className="table-row table-row-data table-row-timeline">
-                      <span className="table-cell" data-label="Type">{describeEntryKind(entry.kind)}</span>
-                      <span className="table-cell" data-label="Détail">{entry.description || 'Aucun détail'}</span>
-                      <span className="table-cell" data-label="Date">{formatDate(entry.occurredOn)}</span>
-                      <span className="table-cell" data-label="Période">{entry.periodKey}</span>
-                      <span className="table-cell" data-label="Montant">{formatMoney(entry.amountCents)}</span>
-                      <span className="table-cell" data-label="Action">
+                      <span className="table-cell table-cell-kind" data-label="Type">{describeEntryKind(entry.kind)}</span>
+                      <span className="table-cell table-cell-detail" data-label="Détail">{entry.description || 'Aucun détail'}</span>
+                      <span className="table-cell table-cell-date" data-label="Date">{formatDate(entry.occurredOn)}</span>
+                      <span className="table-cell table-cell-period" data-label="Période">{entry.periodKey}</span>
+                      <span className="table-cell table-cell-amount" data-label="Montant">{formatMoney(entry.amountCents)}</span>
+                      <span className="table-cell table-cell-actions" data-label="Action">
                         <span className="table-action-group">
                           <button
                             type="button"

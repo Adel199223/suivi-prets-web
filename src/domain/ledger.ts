@@ -224,10 +224,10 @@ export function buildAppSnapshot(input: {
       return left.borrower.name.localeCompare(right.borrower.name)
     })
 
-  const recentPayments = input.entries
+  const paymentHistory = input.entries
     .filter((entry) => entry.kind === 'payment')
     .sort((left, right) => entrySortKey(right).localeCompare(entrySortKey(left)))
-    .slice(0, 8)
+  const recentPayments = paymentHistory.slice(0, 8)
 
   const lastBackupAt = input.meta.find((record) => record.key === 'lastBackupAt')?.value ?? null
   const autoPersistAttemptedAt = input.meta.find((record) => record.key === 'autoPersistAttemptedAt')?.value ?? null
@@ -248,6 +248,7 @@ export function buildAppSnapshot(input: {
     totalPaidCents: debtViews.reduce((sum, debt) => sum + debt.totalPaidCents, 0),
     totalAdjustmentCents: debtViews.reduce((sum, debt) => sum + debt.totalAdjustmentCents, 0),
     outstandingCents: debtViews.reduce((sum, debt) => sum + debt.outstandingCents, 0),
+    paymentHistory,
     recentPayments,
     importSessions: [...input.imports].sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
     lastBackupAt,
