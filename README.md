@@ -67,6 +67,33 @@ npm run update:windows
 
 Si le dossier n'est plus un vrai clone Git (par exemple un ZIP extrait), il faut re-cloner le repo depuis GitHub au lieu d'utiliser la mise à jour.
 
+Si `git pull --ff-only` se bloque parce que `package.json` a un changement local, utilisez d'abord ce diagnostic :
+
+```powershell
+cd C:\chemin\vers\suivi-prets-web
+npm run stop:windows
+git status --short
+git diff -- package.json
+```
+
+Si le diff montre seulement une dérive locale non voulue sur `package.json`, continuez avec :
+
+```powershell
+git restore package.json
+git pull --ff-only
+npm run update:windows
+```
+
+Si `git restore` n'existe pas sur cette machine, utilisez :
+
+```powershell
+git checkout -- package.json
+git pull --ff-only
+npm run update:windows
+```
+
+Si d'autres fichiers suivis sont sales, ou si `package.json` contient de vraies modifications voulues, n'effacez rien automatiquement : faites nettoyer le clone par quelqu'un de technique ou re-clonez le repo.
+
 Si `Set-ExecutionPolicy` est bloqué par la stratégie de votre poste, exécutez :
 
 ```powershell
