@@ -108,7 +108,7 @@ To stop it later: `npm run stop:windows`
 1. Open the dashboard and create an emprunteur.
 2. Open that emprunteur page and create one or more dettes.
 3. Record each payment or avance on the debtor page or debt page.
-4. Open a debt page to check balance, then edit the debt label or notes if needed.
+4. Open a debt page to check balance, then edit the debt label or notes if needed; in the `Timeline`, `Date`, `Période`, and `Montant` now sit together under `Infos`, while `Modifier` and `Supprimer` stay grouped at the end of each line.
 5. The `Derniers paiements` card filters the full payment history for `Tous`, `Dettes encore ouvertes`, or `Dettes soldées`, then starts by showing the 2 newest matching rows; use `Voir les autres paiements` when you want the rest of that filtered list.
 6. Open an emprunteur page to update the borrower name/notes, delete a debt from its card menu, or delete the borrower from the dashboard or detail page if you need cleanup.
 7. Open the import page, choose the `.ods` spreadsheet directly in the app, review the preview, then confirm the import.

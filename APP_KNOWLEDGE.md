@@ -21,6 +21,7 @@ The product is designed around fast daily money tracking:
 - Direct in-app `.ods` import with deterministic preview and same-session merge is implemented.
 - Partial `.ods` import is implemented: safe rows land immediately, while unresolved-but-queueable rows stay in a local pending queue until their month is completed.
 - Dashboard, borrower, debt, and import surfaces now use calmer UX: healthy protection states are compact, pending-import details are collapsed by default, backup/export tools are demoted behind an optional advanced section, dashboard history filters default to `all`, and the recent-payments card filters against the full payment history before collapsing to the newest two matching rows with an inline reveal control.
+- The debt-page history timeline now uses a hybrid desktop `Infos` rail so long detail text, timeline metadata, and edit/delete actions stay readable in the split layout.
 - Borrower deletion is surfaced directly from the dashboard borrower list, and debt deletion is surfaced directly from borrower-page debt cards while repository delete semantics stay unchanged.
 - The WSL-local `.ods` preview generator remains available as an operator fallback for fixtures, regression checks, and exceptional private review work.
 - Fingerprint-guarded local resolution files can patch truly ambiguous workbook rows before preview generation.
@@ -114,7 +115,7 @@ wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:workspa
 wsl.exe bash -lc "cd /home/fa507/dev/suivi-prets-web && npm run validate:ui"
 ```
 
-`npm run validate:ui` now owns its local setup: by default it builds the app, starts the preview server on `http://127.0.0.1:4173`, waits for readiness, and writes artifacts under `output/playwright/`. Pass `--base-url` only when you intentionally want to reuse an already running target.
+`npm run validate:ui` now owns its local setup: by default it builds the app, starts the preview server on `http://127.0.0.1:4173`, waits for readiness, and writes artifacts under `output/playwright/`. It also checks that the debt-history header and first row do not overlap when a long detail is present. Pass `--base-url` only when you intentionally want to reuse an already running target.
 
 ## Known Constraints
 

@@ -18,6 +18,7 @@ This bridge is shorter than `APP_KNOWLEDGE.md` and defers to it when details con
 - Responsive polish is in place for desktop, tablet, and mobile layouts on the main app surfaces
 - Healthy protection states are shown quietly, pending import details are compact and collapsible, and backup/export tools are now secondary to workbook import
 - The recent-payments card filters the full payment history before collapsing to the newest 2 matching rows
+- The debt-page history uses a hybrid `Infos` rail so long timeline detail stays readable beside metadata and actions
 
 ## Primary Risks
 
@@ -47,6 +48,6 @@ This bridge is shorter than `APP_KNOWLEDGE.md` and defers to it when details con
 - `npm run import:preview -- --input <workbook.ods> --output <preview.json>` for local workbook conversion
 - `npm run import:preview -- --input <workbook.ods> --output <preview.json> --resolutions <resolutions.json>` for fingerprint-guarded local row fixes
 - `npm run build` for bundle safety
-- `npm run validate:ui` for repo-owned browser validation; the default path is self-contained and starts the local preview target before running Playwright
+- `npm run validate:ui` for repo-owned browser validation; the default path is self-contained, starts the local preview target before running Playwright, and now asserts that the debt-history rail stays non-overlapping with long detail text
 - `npm run validate:agent-docs` and `npm run validate:workspace-hygiene` for repo contracts
 - Current follow-up priority after a green validation pass: run the first larger private workbook migration when the next workbook is available.
