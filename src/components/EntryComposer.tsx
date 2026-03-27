@@ -62,9 +62,9 @@ export function EntryComposer({ title, submitLabel, kind, onSubmit }: EntryCompo
         />
       </label>
       <label>
-        Date precise
+        Date précise
         <input
-          aria-label="Date precise"
+          aria-label="Date précise"
           type="date"
           value={occurredOn}
           onChange={(event) => setOccurredOn(event.target.value)}

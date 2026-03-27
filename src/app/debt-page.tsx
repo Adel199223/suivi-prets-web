@@ -1,7 +1,8 @@
-import { Link } from 'react-router-dom'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { EntryComposer } from '../components/EntryComposer'
 import { MetricCard } from '../components/MetricCard'
+import { PageActionsMenu } from '../components/PageActionsMenu'
 import { PendingImportResolutionCard } from '../components/PendingImportResolutionCard'
 import { describeEntryKind, formatDate, formatMoney, parseEuroInput } from '../domain/format'
 import type { DebtView, EntryKind } from '../domain/types'
@@ -25,10 +26,12 @@ function DebtInfoForm({
   borrowerId,
   debt,
   onUpdateDebt,
+  onRequireAttention,
 }: {
   borrowerId: string
   debt: DebtView['debt']
   onUpdateDebt: DebtPageProps['onUpdateDebt']
+  onRequireAttention: () => void
 }) {
   const [debtLabel, setDebtLabel] = useState(debt.label)
   const [debtNotes, setDebtNotes] = useState(debt.notes)
@@ -37,7 +40,8 @@ function DebtInfoForm({
   async function handleSaveDebt(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!debtLabel.trim()) {
-      setDetailsError('Ajoutez un libelle de dette.')
+      onRequireAttention()
+      setDetailsError('Ajoutez un libellé de dette.')
       return
     }
 
@@ -51,9 +55,9 @@ function DebtInfoForm({
   return (
     <form className="list-stack" onSubmit={handleSaveDebt}>
       <label>
-        Libelle
+        Libellé
         <input
-          aria-label="Libelle de la dette"
+          aria-label="Libellé de la dette"
           value={debtLabel}
           onChange={(event) => setDebtLabel(event.target.value)}
         />
@@ -75,7 +79,7 @@ function DebtInfoForm({
       </div>
       {detailsError ? <p className="inline-error">{detailsError}</p> : null}
       <p className="section-note">
-        Statut actuel: <strong>{debt.status === 'open' ? 'Ouverte' : 'Cloturee'}</strong>
+        Statut actuel: <strong>{debt.status === 'open' ? 'Ouverte' : 'Clôturée'}</strong>
       </p>
     </form>
   )
@@ -93,7 +97,7 @@ export function DebtPage({
   pendingResolutionErrors,
   onChangePendingResolution,
   onResolvePendingImport,
-  onDeletePendingImport
+  onDeletePendingImport,
 }: DebtPageProps) {
   const [composer, setComposer] = useState<'payment' | 'advance' | null>(null)
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
@@ -101,6 +105,7 @@ export function DebtPage({
   const [editingOccurredOn, setEditingOccurredOn] = useState('')
   const [editingDescription, setEditingDescription] = useState('')
   const [editingError, setEditingError] = useState<string | null>(null)
+  const [isDebtInfoOpen, setIsDebtInfoOpen] = useState(() => !debtView.debt.label.trim())
 
   function startEditingEntry(entry: DebtView['entries'][number]) {
     setEditingEntryId(entry.id)
@@ -142,16 +147,30 @@ export function DebtPage({
     <div className="page-stack">
       <section className="hero-panel">
         <div>
-          <p className="eyebrow">Dette</p>
-          <h1>{debtView.debt.label}</h1>
+          <div className="page-title-row">
+            <div>
+              <p className="eyebrow">Dette</p>
+              <h1>{debtView.debt.label}</h1>
+            </div>
+            <PageActionsMenu label="Ouvrir les actions de la dette">
+              <button
+                type="button"
+                className="ghost-button danger-button"
+                role="menuitem"
+                onClick={() => void onDeleteDebt(debtView.debt.id)}
+              >
+                Supprimer cette dette
+              </button>
+            </PageActionsMenu>
+          </div>
           <p className="lede">
             Emprunteur: <strong>{debtView.borrower.name}</strong>. Gardez une vue claire du solde, des avances et de chaque paiement.
           </p>
         </div>
         <div className="metric-grid">
-          <MetricCard label="Reste a encaisser" value={formatMoney(debtView.outstandingCents)} tone="warning" />
-          <MetricCard label="Total prete" value={formatMoney(debtView.totalLentCents)} />
-          <MetricCard label="Total paye" value={formatMoney(debtView.totalPaidCents)} tone="accent" />
+          <MetricCard label="Reste à encaisser" value={formatMoney(debtView.outstandingCents)} tone="warning" />
+          <MetricCard label="Total prêté" value={formatMoney(debtView.totalLentCents)} />
+          <MetricCard label="Total payé" value={formatMoney(debtView.totalPaidCents)} tone="accent" />
         </div>
       </section>
 
@@ -163,13 +182,13 @@ export function DebtPage({
               <h2>Lignes en attente pour cette dette</h2>
             </div>
             <Link className="inline-link" to="/import">
-              Completer depuis Import & sauvegarde
+              Compléter depuis Import & sauvegarde
             </Link>
           </div>
           <div className="notice-panel notice-panel-warning notice-panel-compact">
             <strong>{debtView.unresolvedImportCount} ligne(s) attendent encore leur mois pour cette dette.</strong>
             <p className="section-note">
-              Solde deja utilisable maintenant: <strong>{formatMoney(debtView.outstandingCents)}</strong>. Montant encore hors
+              Solde déjà utilisable maintenant: <strong>{formatMoney(debtView.outstandingCents)}</strong>. Montant encore hors
               solde: <strong>{formatMoney(debtView.pendingImportedCents)}</strong>.
             </p>
           </div>
@@ -198,13 +217,13 @@ export function DebtPage({
           <div className="section-heading">
             <div>
               <p className="eyebrow">Actions rapides</p>
-              <h2>Mettre a jour la dette</h2>
+              <h2>Mettre à jour la dette</h2>
             </div>
             <button type="button" className="ghost-button" onClick={() => onToggleDebtClosed(debtView.debt.id, debtView.debt.status === 'open')}>
               {debtView.debt.status === 'open' ? 'Clore la dette' : 'Rouvrir la dette'}
             </button>
           </div>
-          <div className="button-row">
+          <div className="debt-card-primary-actions">
             <button type="button" onClick={() => setComposer((current) => (current === 'payment' ? null : 'payment'))}>
               {composer === 'payment' ? 'Masquer le paiement' : 'Enregistrer un paiement'}
             </button>
@@ -240,14 +259,31 @@ export function DebtPage({
               <p className="eyebrow">Fiche dette</p>
               <h2>Informations de la dette</h2>
             </div>
+            <button
+              type="button"
+              className="ghost-button ghost-button-inline section-toggle-button"
+              onClick={() => setIsDebtInfoOpen((current) => !current)}
+            >
+              {isDebtInfoOpen ? 'Masquer les informations' : 'Modifier les informations'}
+            </button>
           </div>
-          <DebtInfoForm
-            key={`${debtView.debt.updatedAt}:${debtView.debt.label}`}
-            borrowerId={debtView.borrower.id}
-            debt={debtView.debt}
-            onUpdateDebt={onUpdateDebt}
-          />
-        </section>
+          {isDebtInfoOpen ? (
+            <DebtInfoForm
+              key={`${debtView.debt.updatedAt}:${debtView.debt.label}`}
+              borrowerId={debtView.borrower.id}
+              debt={debtView.debt}
+              onUpdateDebt={onUpdateDebt}
+              onRequireAttention={() => setIsDebtInfoOpen(true)}
+            />
+        ) : (
+          <div className="section-summary-row">
+            <p className="section-note">
+              Libellé actuel: <strong>{debtView.debt.label}</strong>.
+            </p>
+            {debtView.debt.notes ? <p className="section-note">Notes: {debtView.debt.notes}</p> : null}
+          </div>
+        )}
+      </section>
       </div>
 
       <div className="split-grid">
@@ -261,16 +297,15 @@ export function DebtPage({
           <div className="table-stack">
             {debtView.entries.length === 0 ? (
               <div className="notice-panel notice-panel-empty notice-panel-compact">
-                <strong>Aucune ecriture comptabilisee pour le moment.</strong>
-                <p className="section-note">Les lignes valides apparaitront ici des qu’un paiement, une avance ou une ouverture sera enregistree.</p>
+                <strong>Aucune écriture comptabilisée pour le moment.</strong>
               </div>
             ) : (
               <>
                 <div className="table-row table-row-data table-row-timeline table-head">
                   <span>Type</span>
-                  <span>Detail</span>
+                  <span>Détail</span>
                   <span>Date</span>
-                  <span>Periode</span>
+                  <span>Période</span>
                   <span>Montant</span>
                   <span>Action</span>
                 </div>
@@ -278,9 +313,9 @@ export function DebtPage({
                   <div className="list-stack" key={entry.id}>
                     <div className="table-row table-row-data table-row-timeline">
                       <span className="table-cell" data-label="Type">{describeEntryKind(entry.kind)}</span>
-                      <span className="table-cell" data-label="Detail">{entry.description || 'Aucun detail'}</span>
+                      <span className="table-cell" data-label="Détail">{entry.description || 'Aucun détail'}</span>
                       <span className="table-cell" data-label="Date">{formatDate(entry.occurredOn)}</span>
-                      <span className="table-cell" data-label="Periode">{entry.periodKey}</span>
+                      <span className="table-cell" data-label="Période">{entry.periodKey}</span>
                       <span className="table-cell" data-label="Montant">{formatMoney(entry.amountCents)}</span>
                       <span className="table-cell" data-label="Action">
                         <span className="table-action-group">
@@ -312,7 +347,7 @@ export function DebtPage({
                             void handleSaveEntry(entry.id)
                           }}
                         >
-                          <h4>Modifier cette ligne</h4>
+                          <h3>Modifier cette ligne</h3>
                           <label>
                             Montant (€)
                             <input
@@ -323,18 +358,18 @@ export function DebtPage({
                             />
                           </label>
                           <label>
-                            Date precise
+                            Date précise
                             <input
-                              aria-label="Date precise de la ligne"
+                              aria-label="Date précise de la ligne"
                               type="date"
                               value={editingOccurredOn}
                               onChange={(event) => setEditingOccurredOn(event.target.value)}
                             />
                           </label>
                           <label>
-                            Detail
+                            Détail
                             <input
-                              aria-label="Detail de la ligne"
+                              aria-label="Détail de la ligne"
                               value={editingDescription}
                               onChange={(event) => setEditingDescription(event.target.value)}
                             />
@@ -359,29 +394,29 @@ export function DebtPage({
         <section className="section-card">
           <div className="section-heading">
             <div>
-              <p className="eyebrow">Synthese</p>
-              <h2>Par annee</h2>
+              <p className="eyebrow">Synthèse</p>
+              <h2>Par année</h2>
             </div>
           </div>
           <div className="table-stack">
             {debtView.annualSummaries.length === 0 ? (
               <div className="notice-panel notice-panel-empty notice-panel-compact">
-                <strong>Aucune synthese annuelle pour l’instant.</strong>
-                <p className="section-note">Cette vue se remplira automatiquement des qu’au moins une ligne sure sera comptabilisee.</p>
+                <strong>Aucune synthèse annuelle pour l’instant.</strong>
+                <p className="section-note">Cette vue se remplira automatiquement dès qu’au moins une ligne sûre sera comptabilisée.</p>
               </div>
             ) : (
               <>
                 <div className="table-row table-row-data table-row-summary table-head">
-                  <span>Annee</span>
-                  <span>Prete</span>
-                  <span>Paye</span>
+                  <span>Année</span>
+                  <span>Prêté</span>
+                  <span>Payé</span>
                   <span>Net</span>
                 </div>
                 {debtView.annualSummaries.map((summary) => (
                   <div className="table-row table-row-data table-row-summary" key={summary.year}>
-                    <span className="table-cell" data-label="Annee">{summary.year}</span>
-                    <span className="table-cell" data-label="Prete">{formatMoney(summary.lentCents)}</span>
-                    <span className="table-cell" data-label="Paye">{formatMoney(summary.paidCents)}</span>
+                    <span className="table-cell" data-label="Année">{summary.year}</span>
+                    <span className="table-cell" data-label="Prêté">{formatMoney(summary.lentCents)}</span>
+                    <span className="table-cell" data-label="Payé">{formatMoney(summary.paidCents)}</span>
                     <span className="table-cell" data-label="Net">{formatMoney(summary.netChangeCents)}</span>
                   </div>
                 ))}
@@ -390,28 +425,6 @@ export function DebtPage({
           </div>
         </section>
       </div>
-
-      <section className="section-card section-card-compact">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Zone dangereuse</p>
-            <h2>Supprimer cette dette</h2>
-          </div>
-        </div>
-        <div className="notice-panel notice-panel-warning action-panel">
-          <strong>Suppression definitive de cette dette</strong>
-          <p className="section-note">
-            Les paiements, avances, ajustements et lignes d’import en attente lies a cette dette seront aussi supprimes sur cet appareil.
-          </p>
-          <button
-            type="button"
-            className="ghost-button danger-button"
-            onClick={() => void onDeleteDebt(debtView.debt.id)}
-          >
-            Supprimer cette dette
-          </button>
-        </div>
-      </section>
     </div>
   )
 }

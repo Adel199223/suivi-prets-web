@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { BorrowerPage } from './app/borrower-page'
 import { DashboardPage } from './app/dashboard-page'
 import { DebtPage } from './app/debt-page'
 import { ImportPage } from './app/import-page'
+import { SettingsDrawer } from './components/SettingsDrawer'
 import { describeEntryKind, formatDate, formatMoney } from './domain/format'
 import { createEmptySnapshot } from './domain/ledger'
 import type { AppSnapshot, EntryKind, RecentImportOutcome, WorkbookImportPreviewV1 } from './domain/types'
@@ -39,25 +40,104 @@ import {
 } from './lib/repository'
 import { getStorageStatus, requestPersistentStorage, type StorageStatus } from './lib/storagePersistence'
 
+type ThemePreference = 'light' | 'dark'
+
+const THEME_STORAGE_KEY = 'suivi-prets-web:theme'
+let themePreferenceFallback: ThemePreference = 'light'
+
+function readStoredThemePreference(): ThemePreference {
+  if (typeof window === 'undefined') {
+    return themePreferenceFallback
+  }
+
+  try {
+    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY)
+    if (storedTheme === 'dark' || storedTheme === 'light') {
+      themePreferenceFallback = storedTheme
+      return storedTheme
+    }
+  } catch {
+    // fall through to in-memory fallback
+  }
+
+  return themePreferenceFallback
+}
+
+function persistThemePreference(themePreference: ThemePreference) {
+  themePreferenceFallback = themePreference
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, themePreference)
+  } catch {
+    // best effort only
+  }
+}
+
+function applyThemePreference(themePreference: ThemePreference) {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  document.documentElement.dataset.theme = themePreference
+  document.documentElement.style.colorScheme = themePreference
+}
+
+applyThemePreference(readStoredThemePreference())
+
+function GearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1.2 1.2 0 0 1 0 1.7l-1.6 1.6a1.2 1.2 0 0 1-1.7 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9v.2A1.2 1.2 0 0 1 13.4 22h-2.8a1.2 1.2 0 0 1-1.2-1.2v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1.2 1.2 0 0 1-1.7 0l-1.6-1.6a1.2 1.2 0 0 1 0-1.7l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6h-.2A1.2 1.2 0 0 1 2 13.4v-2.8a1.2 1.2 0 0 1 1.2-1.2h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1.2 1.2 0 0 1 0-1.7l1.6-1.6a1.2 1.2 0 0 1 1.7 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9v-.2A1.2 1.2 0 0 1 10.6 2h2.8a1.2 1.2 0 0 1 1.2 1.2v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1.2 1.2 0 0 1 1.7 0l1.6 1.6a1.2 1.2 0 0 1 0 1.7l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6h.2A1.2 1.2 0 0 1 22 10.6v2.8a1.2 1.2 0 0 1-1.2 1.2h-.2a1 1 0 0 0-.9.6Z" />
+    </svg>
+  )
+}
+
 function Shell({
   flash,
   children,
-  isCloseHelpOpen,
   isLocalRuntime,
-  onToggleCloseHelp,
+  isSettingsOpen,
+  themePreference,
+  backupHealth,
+  storageStatus,
+  localDataSummary,
+  onOpenSettings,
+  onCloseSettings,
+  onChangeTheme,
+  onRequestPersistence,
+  onResetAllData,
 }: {
   flash: string | null
   children: React.ReactNode
-  isCloseHelpOpen: boolean
   isLocalRuntime: boolean
-  onToggleCloseHelp: () => void
+  isSettingsOpen: boolean
+  themePreference: ThemePreference
+  backupHealth: ReturnType<typeof deriveBackupHealth>
+  storageStatus: StorageStatus | null
+  localDataSummary: {
+    borrowerCount: number
+    debtCount: number
+    entryCount: number
+    importCount: number
+    unresolvedCount: number
+    hasAnyData: boolean
+  }
+  onOpenSettings: () => void
+  onCloseSettings: () => void
+  onChangeTheme: (themePreference: ThemePreference) => void
+  onRequestPersistence: () => Promise<void>
+  onResetAllData: () => Promise<void>
 }) {
   return (
     <div className="app-shell">
       <header className="topbar">
         <div>
           <p className="eyebrow">Local-first debt tracking</p>
-          <strong className="brand-mark">Suivi Prets</strong>
+          <strong className="brand-mark">Suivi Prêts</strong>
         </div>
         <div className="topbar-actions">
           <nav className="nav-tabs" aria-label="Navigation principale">
@@ -66,46 +146,28 @@ function Shell({
           </nav>
           <button
             type="button"
-            className="ghost-button topbar-helper-button"
-            aria-expanded={isCloseHelpOpen}
-            aria-controls="close-help-panel"
-            onClick={onToggleCloseHelp}
+            className="ghost-button icon-button topbar-settings-button"
+            aria-label={isSettingsOpen ? 'Fermer les réglages' : 'Ouvrir les réglages'}
+            onClick={isSettingsOpen ? onCloseSettings : onOpenSettings}
           >
-            {isCloseHelpOpen ? 'Masquer l’aide fermeture' : 'Comment fermer ?'}
+            <GearIcon />
+            <span className="topbar-settings-text">Réglages</span>
           </button>
         </div>
       </header>
-      {isCloseHelpOpen ? (
-        <section id="close-help-panel" className="notice-panel notice-panel-empty helper-panel">
-          <div className="notice-panel-header">
-            <strong>{isLocalRuntime ? 'Comment fermer l’app en local' : 'Comment quitter cette version'}</strong>
-            <span className="status-chip status-chip-neutral">
-              {isLocalRuntime ? 'Lancement local' : 'Version hébergée'}
-            </span>
-          </div>
-          {isLocalRuntime ? (
-            <>
-              <p className="section-note">
-                Si le terminal qui a lancé l’app est encore ouvert, utilisez <code>Ctrl+C</code>.
-              </p>
-              <p className="section-note">
-                Sinon, dans le dossier du repo sous Windows, utilisez <code>npm run stop:windows</code>.
-              </p>
-              <p className="section-note">
-                Commande directe si besoin: <code>.\scripts\stop-windows.ps1</code>.
-              </p>
-              <p className="section-note">Fermer seulement l’onglet du navigateur ne coupe pas le serveur local.</p>
-            </>
-          ) : (
-            <>
-              <p className="section-note">Il n’y a pas de serveur local à arrêter ici sur cet appareil.</p>
-              <p className="section-note">
-                Fermez simplement l’onglet ou quittez le navigateur quand vous avez terminé.
-              </p>
-            </>
-          )}
-        </section>
-      ) : null}
+      <SettingsDrawer
+        key={`${isSettingsOpen}-${isLocalRuntime}-${backupHealth.state}`}
+        isOpen={isSettingsOpen}
+        isLocalRuntime={isLocalRuntime}
+        themePreference={themePreference}
+        backupHealth={backupHealth}
+        storageStatus={storageStatus}
+        localDataSummary={localDataSummary}
+        onClose={onCloseSettings}
+        onChangeTheme={onChangeTheme}
+        onRequestPersistence={onRequestPersistence}
+        onResetAllData={onResetAllData}
+      />
       {flash ? <div role="status" className="flash-banner">{flash}</div> : null}
       <main className="page-frame">{children}</main>
     </div>
@@ -160,6 +222,7 @@ function DebtRoute(props: {
 export default function App({ runtimeHostname }: { runtimeHostname?: string } = {}) {
   const snapshot = useLiveQuery(() => buildSnapshot(), [], createEmptySnapshot())
   const navigate = useNavigate()
+  const location = useLocation()
   const [flash, setFlash] = useState<string | null>(null)
   const [importArtifact, setImportArtifact] = useState<WorkbookImportPreviewV1 | null>(null)
   const [importSourceFile, setImportSourceFile] = useState<File | null>(null)
@@ -169,24 +232,46 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
   const [pendingResolutionErrors, setPendingResolutionErrors] = useState<Record<string, string>>({})
   const [lastImportOutcome, setLastImportOutcome] = useState<RecentImportOutcome | null>(null)
   const [isImportOutcomeCollapsed, setIsImportOutcomeCollapsed] = useState(false)
-  const [isCloseHelpOpen, setIsCloseHelpOpen] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isImportLoading, setIsImportLoading] = useState(false)
   const [storageStatus, setStorageStatus] = useState<StorageStatus | null>(null)
+  const [themePreference, setThemePreference] = useState<ThemePreference>(() => readStoredThemePreference())
   const autoPersistInFlightRef = useRef(false)
   const autoPersistAttemptedRef = useRef(false)
   const backupHealth = deriveBackupHealth(snapshot, storageStatus)
   const hostname = runtimeHostname ?? (typeof window === 'undefined' ? '' : window.location.hostname)
   const isLocalRuntime = hostname === 'localhost' || hostname === '127.0.0.1'
+  const localDataSummary = {
+    borrowerCount: snapshot.borrowers.length,
+    debtCount: snapshot.debts.length,
+    entryCount: snapshot.debts.reduce((sum, debtView) => sum + debtView.entries.length, 0),
+    importCount: snapshot.importSessions.length,
+    unresolvedCount: snapshot.unresolvedImportCount,
+    hasAnyData:
+      snapshot.borrowers.length > 0 ||
+      snapshot.debts.length > 0 ||
+      snapshot.importSessions.length > 0 ||
+      snapshot.unresolvedImportCount > 0,
+  }
 
   useEffect(() => {
     void getStorageStatus().then(setStorageStatus)
   }, [snapshot.lastBackupAt, snapshot.importSessions.length, snapshot.unresolvedImportCount, snapshot.autoPersistAttemptedAt])
 
   useEffect(() => {
+    setIsSettingsOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
     if (snapshot.autoPersistAttemptedAt) {
       autoPersistAttemptedRef.current = true
     }
   }, [snapshot.autoPersistAttemptedAt])
+
+  useEffect(() => {
+    persistThemePreference(themePreference)
+    applyThemePreference(themePreference)
+  }, [themePreference])
 
   function announce(message: string): void {
     setFlash(message)
@@ -305,25 +390,25 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
   async function handleCreateBorrower(input: { name: string; notes?: string }) {
     const borrower = await createBorrower(input)
     void maybeAutoProtectLocalSave()
-    announce('Emprunteur cree.')
+    announce('Emprunteur créé.')
     navigate(`/emprunteurs/${borrower.id}`)
   }
 
   async function handleCreateDebt(input: Parameters<typeof createDebt>[0]) {
     const debt = await createDebt(input)
     void maybeAutoProtectLocalSave()
-    announce('Dette creee.')
+    announce('Dette créée.')
     navigate(`/dettes/${debt.id}`)
   }
 
   async function handleUpdateBorrower(borrowerId: string, input: { name: string; notes: string }) {
     await updateBorrower(borrowerId, input)
-    announce('Fiche emprunteur enregistree.')
+    announce('Fiche emprunteur enregistrée.')
   }
 
   async function handleUpdateDebt(debtId: string, input: { label: string; notes: string }) {
     await updateDebt(debtId, input)
-    announce('Informations de la dette enregistrees.')
+    announce('Informations de la dette enregistrées.')
   }
 
   async function handleAddEntry(
@@ -338,7 +423,7 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
       description: input.description
     })
     void maybeAutoProtectLocalSave()
-    announce(input.kind === 'payment' ? 'Paiement enregistre.' : 'Avance enregistree.')
+    announce(input.kind === 'payment' ? 'Paiement enregistré.' : 'Avance enregistrée.')
   }
 
   async function handleUpdateEntry(
@@ -346,7 +431,7 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
     input: { amountCents: number; occurredOn: string | null; description: string }
   ) {
     await updateLedgerEntry(entryId, input)
-    announce('Ecriture mise a jour.')
+    announce('Écriture mise à jour.')
   }
 
   async function handleImportWorkbookSelect(file: File) {
@@ -370,21 +455,21 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
       announce(
         savedResolutions.length > 0
           ? blockingIssues.length > 0
-            ? `Classeur analyse. ${savedResolutions.length} correction(s) locale(s) memorisee(s) rechargee(s), mais certaines lignes restent encore bloquantes.`
+            ? `Classeur analysé. ${savedResolutions.length} correction(s) locale(s) mémorisée(s) rechargée(s), mais certaines lignes restent encore bloquantes.`
             : artifact.preview.unresolvedEntries.length > 0
-              ? `Classeur analyse. ${savedResolutions.length} correction(s) locale(s) reappliquee(s), et ${artifact.preview.unresolvedEntries.length} ligne(s) peuvent attendre plus tard.`
-              : `Classeur analyse. ${savedResolutions.length} correction(s) locale(s) memorisee(s) reappliquee(s) dans cette fenetre.`
+              ? `Classeur analysé. ${savedResolutions.length} correction(s) locale(s) réappliquée(s), et ${artifact.preview.unresolvedEntries.length} ligne(s) peuvent attendre plus tard.`
+              : `Classeur analysé. ${savedResolutions.length} correction(s) locale(s) mémorisée(s) réappliquée(s) dans cette fenêtre.`
           : blockingIssues.length > 0
-            ? 'Classeur analyse. Certaines lignes restent trop ambigues pour etre importees.'
+            ? 'Classeur analysé. Certaines lignes restent trop ambiguës pour être importées.'
             : artifact.preview.unresolvedEntries.length > 0
-              ? `Classeur analyse. ${artifact.preview.unresolvedEntries.length} ligne(s) resteront en attente si vous importez maintenant.`
-              : 'Classeur analyse. Apercu pret dans cette fenetre.',
+              ? `Classeur analysé. ${artifact.preview.unresolvedEntries.length} ligne(s) resteront en attente si vous importez maintenant.`
+              : 'Classeur analysé. Aperçu prêt dans cette fenêtre.',
       )
     } catch (error) {
       setLastImportOutcome(null)
       resetImportWorkingState()
       setIsImportOutcomeCollapsed(false)
-      announce(error instanceof Error ? error.message : "Impossible de charger l’apercu d’import.")
+      announce(error instanceof Error ? error.message : "Impossible de charger l’aperçu d’import.")
     } finally {
       setIsImportLoading(false)
     }
@@ -411,7 +496,7 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
       return
     }
     if (getBlockingImportIssues(importArtifact).length > 0) {
-      announce('Import bloque: certaines lignes du classeur doivent encore etre corrigees.')
+      announce('Import bloqué: certaines lignes du classeur doivent encore être corrigées.')
       return
     }
 
@@ -455,9 +540,9 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
         delete next[unresolvedImportId]
         return next
       })
-      announce('Ligne en attente resolue et ajoutee a la dette correspondante.')
+      announce('Ligne en attente résolue et ajoutée à la dette correspondante.')
     } catch (error) {
-      if (error instanceof Error && error.message.includes('periode valide')) {
+      if (error instanceof Error && (error.message.includes('période valide') || error.message.includes('periode valide'))) {
         setPendingResolutionErrors((current) => ({
           ...current,
           [unresolvedImportId]: error.message
@@ -465,7 +550,7 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
         return
       }
 
-      announce(error instanceof Error ? error.message : 'Impossible de resoudre cette ligne en attente.')
+      announce(error instanceof Error ? error.message : 'Impossible de résoudre cette ligne en attente.')
     }
   }
 
@@ -477,17 +562,17 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
     }
 
     const confirmed = window.confirm(
-      `Supprimer cette ligne en attente ?\n\n${pending.borrowerName} · ${pending.debtLabel}\n${formatMoney(pending.amountCents)} · ${pending.sheetName} · ligne ${pending.rowNumber}\n\nCette ligne sortira definitivement de la file locale sans entrer dans les totaux.`
+      `Supprimer cette ligne en attente ?\n\n${pending.borrowerName} · ${pending.debtLabel}\n${formatMoney(pending.amountCents)} · ${pending.sheetName} · ligne ${pending.rowNumber}\n\nCette ligne sortira définitivement de la file locale sans entrer dans les totaux.`
     )
 
     if (!confirmed) {
-      announce('Suppression annulee.')
+      announce('Suppression annulée.')
       return
     }
 
     await deleteUnresolvedImport(unresolvedImportId)
     clearPendingResolutionState([unresolvedImportId])
-    announce('Ligne en attente supprimee.')
+    announce('Ligne en attente supprimée.')
   }
 
   async function handleDeleteLedgerEntry(entryId: string) {
@@ -495,21 +580,21 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
     const entry = debtView?.entries.find((item) => item.id === entryId)
 
     if (!entry) {
-      announce('Ecriture introuvable.')
+      announce('Écriture introuvable.')
       return
     }
 
     const confirmed = window.confirm(
-      `Supprimer cette ecriture ?\n\n${describeEntryKind(entry.kind)} · ${formatMoney(entry.amountCents)}\nDate: ${formatDate(entry.occurredOn)}\nPeriode: ${entry.periodKey}\n\nCette ligne disparaitra de l’historique et des totaux de cette dette.`
+      `Supprimer cette écriture ?\n\n${describeEntryKind(entry.kind)} · ${formatMoney(entry.amountCents)}\nDate: ${formatDate(entry.occurredOn)}\nPériode: ${entry.periodKey}\n\nCette ligne disparaîtra de l’historique et des totaux de cette dette.`
     )
 
     if (!confirmed) {
-      announce('Suppression annulee.')
+      announce('Suppression annulée.')
       return
     }
 
     await deleteLedgerEntry(entryId)
-    announce('Ecriture supprimee.')
+    announce('Écriture supprimée.')
   }
 
   async function handleDeleteDebt(debtId: string) {
@@ -522,18 +607,18 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
     }
 
     const confirmed = window.confirm(
-      `Supprimer cette dette ?\n\n${debtView.borrower.name} · ${debtView.debt.label}\n${debtView.entries.length} ecriture(s)\n${debtView.pendingImports.length} ligne(s) en attente\n\nLes paiements, avances, ajustements et lignes en attente lies a cette dette seront aussi supprimes sur cet appareil.`
+      `Supprimer cette dette ?\n\n${debtView.borrower.name} · ${debtView.debt.label}\n${debtView.entries.length} écriture(s)\n${debtView.pendingImports.length} ligne(s) en attente\n\nLes paiements, avances, ajustements et lignes en attente liés à cette dette seront aussi supprimés sur cet appareil.`
     )
 
     if (!confirmed) {
-      announce('Suppression annulee.')
+      announce('Suppression annulée.')
       return
     }
 
     await deleteDebt(debtId)
     clearPendingResolutionState(debtView.pendingImports.map((item) => item.id))
     pruneLastImportOutcome({ debtIds: [debtId] })
-    announce('Dette supprimee.')
+    announce('Dette supprimée.')
     navigate(`/emprunteurs/${debtView.borrower.id}`)
   }
 
@@ -549,11 +634,11 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
     const affectedDebtIds = borrowerView.debts.map((debtView) => debtView.debt.id)
     const entryCount = borrowerView.debts.reduce((sum, debtView) => sum + debtView.entries.length, 0)
     const confirmed = window.confirm(
-      `Supprimer cet emprunteur ?\n\n${borrowerView.borrower.name}\n${borrowerView.debts.length} dette(s)\n${entryCount} ecriture(s)\n${borrowerView.pendingImports.length} ligne(s) en attente\n\nToutes les dettes, ecritures et lignes en attente liees a cet emprunteur seront aussi supprimees sur cet appareil.`
+      `Supprimer cet emprunteur ?\n\n${borrowerView.borrower.name}\n${borrowerView.debts.length} dette(s)\n${entryCount} écriture(s)\n${borrowerView.pendingImports.length} ligne(s) en attente\n\nToutes les dettes, écritures et lignes en attente liées à cet emprunteur seront aussi supprimées sur cet appareil.`
     )
 
     if (!confirmed) {
-      announce('Suppression annulee.')
+      announce('Suppression annulée.')
       return
     }
 
@@ -563,14 +648,14 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
       borrowerIds: [borrowerId],
       debtIds: affectedDebtIds,
     })
-    announce('Emprunteur supprime.')
+    announce('Emprunteur supprimé.')
     navigate('/')
   }
 
   async function handleExportBackup() {
     const backup = await exportBackup()
     downloadJson(`suivi-prets-backup-${backup.exportedAt.slice(0, 10)}.json`, serializeBackup(backup))
-    announce('Sauvegarde exportee.')
+    announce('Sauvegarde exportée.')
   }
 
   async function handleRestoreBackup(file: File) {
@@ -578,11 +663,11 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
       const backup = await parseBackupFile(file)
       const summary = summarizeBackup(backup)
       const confirmed = window.confirm(
-        `Restaurer la sauvegarde du ${summary.exportedAt.slice(0, 10)} ?\n\n${summary.borrowerCount} emprunteur(s)\n${summary.debtCount} dette(s)\n${summary.entryCount} ecriture(s)\n${summary.importCount} session(s) d’import\n${summary.unresolvedImportCount} ligne(s) en attente\n\nCette action remplace DEFINITIVEMENT toutes les donnees locales de ce navigateur (pratique pour transferer vers un autre appareil). Confirmez-vous d’utiliser cette sauvegarde comme source de vérité ?`
+        `Restaurer la sauvegarde du ${summary.exportedAt.slice(0, 10)} ?\n\n${summary.borrowerCount} emprunteur(s)\n${summary.debtCount} dette(s)\n${summary.entryCount} écriture(s)\n${summary.importCount} session(s) d’import\n${summary.unresolvedImportCount} ligne(s) en attente\n\nCette action remplace DÉFINITIVEMENT toutes les données locales de ce navigateur (pratique pour transférer vers un autre appareil). Confirmez-vous d’utiliser cette sauvegarde comme source de vérité ?`
       )
 
       if (!confirmed) {
-        announce('Restauration annulee.')
+        announce('Restauration annulée.')
         return
       }
 
@@ -591,7 +676,7 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
       resetImportWorkingState()
       setLastImportOutcome(null)
       setIsImportOutcomeCollapsed(false)
-      announce('Sauvegarde restauree dans ce navigateur.')
+      announce('Sauvegarde restaurée dans ce navigateur.')
       navigate('/')
     } catch (error) {
       announce(error instanceof Error ? error.message : 'Impossible de restaurer cette sauvegarde.')
@@ -617,13 +702,13 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
       setIsImportOutcomeCollapsed(false)
       announce(
         blockingIssues.length > 0
-          ? 'Corrections memorisees oubliees pour ce fichier. Certaines lignes redeviennent bloquantes.'
+          ? 'Corrections mémorisées oubliées pour ce fichier. Certaines lignes redeviennent bloquantes.'
           : artifact.preview.unresolvedEntries.length > 0
-            ? 'Corrections memorisees oubliees pour ce fichier. Les lignes auparavant corrigees repassent en attente.'
-            : 'Corrections memorisees oubliees pour ce fichier.',
+            ? 'Corrections mémorisées oubliées pour ce fichier. Les lignes auparavant corrigées repassent en attente.'
+            : 'Corrections mémorisées oubliées pour ce fichier.',
       )
     } catch (error) {
-      announce(error instanceof Error ? error.message : "Impossible d’oublier ces corrections memorisees.")
+      announce(error instanceof Error ? error.message : "Impossible d’oublier ces corrections mémorisées.")
     } finally {
       setIsImportLoading(false)
     }
@@ -636,21 +721,21 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
     const nextStatus = await refreshStorageStatus()
     announce(
       nextStatus.persisted
-        ? 'Protection locale renforcee: le navigateur confirme maintenant le stockage persistant.'
+        ? 'Protection locale renforcée: le navigateur confirme maintenant le stockage persistant.'
         : result === null
-          ? 'Ce navigateur ne confirme pas le stockage persistant. Vos donnees restent enregistrees localement, et vous pourrez creer une copie de secours en plus si vous le souhaitez.'
-          : 'Le navigateur n’a pas confirme le stockage persistant. Vos donnees restent enregistrees localement, et vous pourrez creer une copie de secours en plus si vous le souhaitez.'
+          ? 'Ce navigateur ne confirme pas le stockage persistant. Vos données restent enregistrées localement, et vous pourrez créer une copie de secours en plus si vous le souhaitez.'
+          : 'Le navigateur n’a pas confirmé le stockage persistant. Vos données restent enregistrées localement, et vous pourrez créer une copie de secours en plus si vous le souhaitez.'
     )
   }
 
   async function handleResetAllData() {
     const entryCount = snapshot.debts.reduce((sum, debtView) => sum + debtView.entries.length, 0)
     const confirmation = window.prompt(
-      `Tout effacer sur cet appareil ?\n\n${snapshot.borrowers.length} emprunteur(s)\n${snapshot.debts.length} dette(s)\n${entryCount} ecriture(s)\n${snapshot.unresolvedImportCount} ligne(s) en attente\n${snapshot.importSessions.length} session(s) d’import\n\nCette action supprime DEFINITIVEMENT toutes les donnees locales de ce navigateur, y compris l’historique d’import et les meta locales.\n\nExportez une copie de secours avant si vous voulez garder une copie.\n\nTapez EFFACER pour confirmer.`
+      `Tout effacer sur cet appareil ?\n\n${snapshot.borrowers.length} emprunteur(s)\n${snapshot.debts.length} dette(s)\n${entryCount} écriture(s)\n${snapshot.unresolvedImportCount} ligne(s) en attente\n${snapshot.importSessions.length} session(s) d’import\n\nCette action supprime DÉFINITIVEMENT toutes les données locales de ce navigateur, y compris l’historique d’import et les métadonnées locales.\n\nExportez une copie de secours avant si vous voulez garder une copie.\n\nTapez EFFACER pour confirmer.`
     )
 
     if (confirmation?.trim().toUpperCase() !== 'EFFACER') {
-      announce('Effacement total annule.')
+      announce('Effacement total annulé.')
       return
     }
 
@@ -658,16 +743,25 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
     resetImportWorkingState()
     setLastImportOutcome(null)
     setIsImportOutcomeCollapsed(false)
-    announce('Toutes les donnees locales ont ete effacees sur cet appareil.')
+    setIsSettingsOpen(false)
+    announce('Toutes les données locales ont été effacées sur cet appareil.')
     navigate('/')
   }
 
   return (
     <Shell
       flash={flash}
-      isCloseHelpOpen={isCloseHelpOpen}
       isLocalRuntime={isLocalRuntime}
-      onToggleCloseHelp={() => setIsCloseHelpOpen((current) => !current)}
+      isSettingsOpen={isSettingsOpen}
+      themePreference={themePreference}
+      backupHealth={backupHealth}
+      storageStatus={storageStatus}
+      localDataSummary={localDataSummary}
+      onOpenSettings={() => setIsSettingsOpen(true)}
+      onCloseSettings={() => setIsSettingsOpen(false)}
+      onChangeTheme={setThemePreference}
+      onRequestPersistence={handleRequestPersistence}
+      onResetAllData={handleResetAllData}
     >
       <Routes>
         <Route
@@ -681,6 +775,7 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
               onCollapseImportOutcome={() => setIsImportOutcomeCollapsed(true)}
               onExpandImportOutcome={() => setIsImportOutcomeCollapsed(false)}
               onCreateBorrower={handleCreateBorrower}
+              onOpenSettings={() => setIsSettingsOpen(true)}
             />
           }
         />
@@ -691,7 +786,7 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
               snapshot={snapshot}
               onCreateDebt={handleCreateDebt}
               onAddEntry={handleAddEntry}
-              onToggleDebtClosed={(debtId, closed) => setDebtClosed(debtId, closed).then(() => announce(closed ? 'Dette cloturee.' : 'Dette rouverte.'))}
+              onToggleDebtClosed={(debtId, closed) => setDebtClosed(debtId, closed).then(() => announce(closed ? 'Dette clôturée.' : 'Dette rouverte.'))}
               onUpdateBorrower={handleUpdateBorrower}
               pendingResolutionDrafts={pendingResolutionDrafts}
               pendingResolutionErrors={pendingResolutionErrors}
@@ -708,7 +803,7 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
             <DebtRoute
               snapshot={snapshot}
               onAddEntry={handleAddEntry}
-              onToggleDebtClosed={(debtId, closed) => setDebtClosed(debtId, closed).then(() => announce(closed ? 'Dette cloturee.' : 'Dette rouverte.'))}
+              onToggleDebtClosed={(debtId, closed) => setDebtClosed(debtId, closed).then(() => announce(closed ? 'Dette clôturée.' : 'Dette rouverte.'))}
               onUpdateDebt={handleUpdateDebt}
               onDeleteDebt={handleDeleteDebt}
               onUpdateEntry={handleUpdateEntry}
@@ -725,25 +820,12 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
           path="/import"
           element={
             <ImportPage
-              backupHealth={backupHealth}
               importArtifact={importArtifact}
               activeImportResolutions={activeImportResolutions}
               isImportLoading={isImportLoading}
               importSessions={snapshot.importSessions}
               lastBackupAt={snapshot.lastBackupAt}
               unresolvedImports={snapshot.unresolvedImports}
-              localDataSummary={{
-                borrowerCount: snapshot.borrowers.length,
-                debtCount: snapshot.debts.length,
-                entryCount: snapshot.debts.reduce((sum, debtView) => sum + debtView.entries.length, 0),
-                importCount: snapshot.importSessions.length,
-                unresolvedCount: snapshot.unresolvedImportCount,
-                hasAnyData:
-                  snapshot.borrowers.length > 0 ||
-                  snapshot.debts.length > 0 ||
-                  snapshot.importSessions.length > 0 ||
-                  snapshot.unresolvedImportCount > 0,
-              }}
               pendingResolutionDrafts={pendingResolutionDrafts}
               pendingResolutionErrors={pendingResolutionErrors}
               rememberedImportResolutions={rememberedImportResolutions}
@@ -756,8 +838,6 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
               onApplyImport={handleApplyImport}
               onExportBackup={handleExportBackup}
               onRestoreBackup={handleRestoreBackup}
-              onRequestPersistence={handleRequestPersistence}
-              onResetAllData={handleResetAllData}
             />
           }
         />

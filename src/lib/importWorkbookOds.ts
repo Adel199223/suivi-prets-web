@@ -10,6 +10,7 @@ import type {
   WorkbookImportPreviewV1,
 } from '../domain/types'
 import { createImportEntrySignature, createUnresolvedImportSignature } from './importSignature'
+import { buildResolvedImportDescription } from './resolvedImportDescription'
 
 const NS = {
   office: 'urn:oasis:names:tc:opendocument:xmlns:office:1.0',
@@ -46,8 +47,7 @@ function withResolutionNote(description: string, resolution: ImportIssueResoluti
     return normalized
   }
 
-  const prefix = normalized || 'Import detail'
-  return `${prefix} [periode resolue dans l'app: ${resolution.periodKey}]`
+  return buildResolvedImportDescription(normalized, resolution.periodKey)
 }
 
 function normalizeWhitespace(value: string): string {
@@ -517,7 +517,7 @@ function parseSheet(
         sheetName,
         rowNumber,
         code: 'invalid_amount',
-        message: 'Le montant resume de paiement de cette ligne ne peut pas etre lu de maniere fiable.',
+        message: 'Le montant résumé de paiement de cette ligne ne peut pas être lu de manière fiable.',
       })
       return
     }
@@ -527,7 +527,7 @@ function parseSheet(
         sheetName,
         rowNumber,
         code: 'invalid_amount',
-        message: 'Le montant resume d’avance de cette ligne ne peut pas etre lu de maniere fiable.',
+        message: 'Le montant résumé d’avance de cette ligne ne peut pas être lu de manière fiable.',
       })
       return
     }
@@ -559,7 +559,7 @@ function parseSheet(
           description: baseDescription,
           sourceRef: `${sheetName}:${rowNumber}`,
           reasonCode: 'missing_period',
-          reasonMessage: 'Impossible de deduire la periode de cette ligne detaillee.',
+          reasonMessage: 'Impossible de déduire la période de cette ligne détaillée.',
           signature: createUnresolvedImportSignature({
             borrowerSourceKey,
             debtSourceKey,
@@ -621,7 +621,7 @@ function parseSheet(
         sheetName,
         rowNumber,
         reasonCode: 'missing_period',
-        reasonMessage: 'Une valeur de resume existe sans periode exploitable.',
+        reasonMessage: 'Une valeur de résumé existe sans période exploitable.',
         signature: createUnresolvedImportSignature({
           borrowerSourceKey,
           debtSourceKey,
@@ -654,7 +654,7 @@ function parseSheet(
         sheetName,
         rowNumber,
         reasonCode: 'missing_period',
-        reasonMessage: 'Une valeur de resume existe sans periode exploitable.',
+        reasonMessage: 'Une valeur de résumé existe sans période exploitable.',
         signature: createUnresolvedImportSignature({
           borrowerSourceKey,
           debtSourceKey,
@@ -674,7 +674,7 @@ function parseSheet(
           sheetName,
           rowNumber,
           code: 'missing_period',
-          message: 'Une valeur de resume existe mais ne peut pas encore etre mise en attente de maniere fiable.',
+          message: 'Une valeur de résumé existe mais ne peut pas encore être mise en attente de manière fiable.',
         })
       }
       return

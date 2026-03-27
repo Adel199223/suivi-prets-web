@@ -1,5 +1,6 @@
 import { normalizeWhitespace } from '../domain/format'
 import type { EntryKind } from '../domain/types'
+import { canonicalizeResolvedImportDescriptionForSignature } from './resolvedImportDescription'
 
 export function createImportEntrySignature(candidate: {
   borrowerSourceKey: string
@@ -17,7 +18,7 @@ export function createImportEntrySignature(candidate: {
     candidate.amountCents,
     candidate.periodKey,
     candidate.occurredOn ?? '',
-    normalizeWhitespace(candidate.description).toLowerCase(),
+    normalizeWhitespace(canonicalizeResolvedImportDescriptionForSignature(candidate.description)).toLowerCase(),
   ].join('|')
 }
 

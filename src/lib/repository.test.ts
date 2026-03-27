@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import type { ImportPreview } from '../domain/types'
 import { buildWorkbookFile } from '../../test/fixtures/import/files'
 import { parseImportWorkbookFile } from './importWorkbook'
+import { db } from './db'
+import { createImportEntrySignature, createUnresolvedImportSignature } from './importSignature'
+import { loadSavedImportResolutions } from './importResolutionMemory'
 import {
   addLedgerEntry,
   applyImportPreview,
@@ -19,6 +23,125 @@ import {
   updateDebt,
   updateLedgerEntry
 } from './repository'
+
+function buildEmptyDescriptionResolvedImportPreviews(): { partial: ImportPreview; resolved: ImportPreview } {
+  const fileName = 'empty-description-workbook.ods'
+  const fingerprint = 'empty-description-fingerprint'
+  const borrowerSourceKey = 'adel'
+  const borrowerName = 'Adel'
+  const debtSourceKey = 'adel:dette-1'
+  const debtLabel = 'Dette 1'
+  const sheetName = 'dette_adel_1'
+  const rowNumber = 2
+  const amountCents = 30000
+  const sourceRef = `${sheetName}:${rowNumber}`
+  const resolvedDescription = "Import detail [période résolue dans l'app: 2024-01]"
+  const resolvedEntry = {
+    debtSourceKey,
+    borrowerSourceKey,
+    borrowerName,
+    debtLabel,
+    kind: 'payment' as const,
+    amountCents,
+    periodKey: '2024-01',
+    occurredOn: null,
+    description: resolvedDescription,
+    sourceRef,
+    sheetName,
+    rowNumber,
+    signature: createImportEntrySignature({
+      borrowerSourceKey,
+      debtSourceKey,
+      kind: 'payment',
+      amountCents,
+      periodKey: '2024-01',
+      occurredOn: null,
+      description: resolvedDescription,
+    }),
+  }
+
+  return {
+    partial: {
+      fileName,
+      fingerprint,
+      debts: [
+        {
+          sourceKey: debtSourceKey,
+          borrowerSourceKey,
+          borrowerName,
+          label: debtLabel,
+          notes: `Importe depuis ${sheetName}`,
+          sheetName,
+          entries: [],
+        },
+      ],
+      entries: [],
+      unresolvedEntries: [
+        {
+          debtSourceKey,
+          borrowerSourceKey,
+          borrowerName,
+          debtLabel,
+          kind: 'payment',
+          amountCents,
+          occurredOn: null,
+          description: '',
+          sourceRef,
+          sheetName,
+          rowNumber,
+          reasonCode: 'missing_period',
+          reasonMessage: 'Impossible de déduire la période de cette ligne détaillée.',
+          signature: createUnresolvedImportSignature({
+            borrowerSourceKey,
+            debtSourceKey,
+            kind: 'payment',
+            amountCents,
+            occurredOn: null,
+            description: '',
+            sourceRef,
+          }),
+        },
+      ],
+      issues: [],
+      summary: {
+        debtCount: 1,
+        borrowerCount: 1,
+        entryCount: 0,
+        unresolvedCount: 1,
+        paymentCount: 0,
+        advanceCount: 0,
+        outstandingImportedCents: 0,
+      },
+    },
+    resolved: {
+      fileName,
+      fingerprint,
+      debts: [
+        {
+          sourceKey: debtSourceKey,
+          borrowerSourceKey,
+          borrowerName,
+          label: debtLabel,
+          notes: `Importe depuis ${sheetName}`,
+          sheetName,
+          entries: [resolvedEntry],
+        },
+      ],
+      entries: [resolvedEntry],
+      unresolvedEntries: [],
+      issues: [],
+      summary: {
+        debtCount: 1,
+        borrowerCount: 1,
+        entryCount: 1,
+        unresolvedCount: 0,
+        paymentCount: 1,
+        advanceCount: 0,
+        outstandingImportedCents: -amountCents,
+      },
+    },
+  }
+}
 
 describe('repository import merge', () => {
   beforeEach(async () => {
@@ -77,7 +200,78 @@ describe('repository import merge', () => {
     expect(resolvedSnapshot.debts[0]?.pendingImports).toHaveLength(0)
     expect(resolvedSnapshot.debts[0]?.pendingImportedCents).toBe(0)
     expect(resolvedSnapshot.debts[0]?.entries[0]?.periodKey).toBe('2024-01')
-    expect(resolvedSnapshot.debts[0]?.entries[0]?.description).toContain("[periode resolue dans l'app: 2024-01]")
+    expect(resolvedSnapshot.debts[0]?.entries[0]?.description).toContain("[période résolue dans l'app: 2024-01]")
+  })
+
+  it('dedupes a reimported resolved row when the original queued line had no description', async () => {
+    const previews = buildEmptyDescriptionResolvedImportPreviews()
+
+    await applyImportPreview(previews.partial)
+    const partialSnapshot = await buildSnapshot()
+    const pending = partialSnapshot.unresolvedImports[0]
+    expect(pending).toBeDefined()
+
+    await resolveUnresolvedImport(pending!.id, '2024-01')
+
+    const afterResolve = await buildSnapshot()
+    expect(afterResolve.debts[0]?.entries).toHaveLength(1)
+    expect(afterResolve.debts[0]?.entries[0]?.description).toBe("Import détail [période résolue dans l'app: 2024-01]")
+    const outstandingAfterResolve = afterResolve.debts[0]?.outstandingCents
+
+    const second = await applyImportPreview(previews.resolved)
+    const afterReimport = await buildSnapshot()
+
+    expect(second.session.appliedEntries).toBe(0)
+    expect(second.session.duplicateEntries).toBe(1)
+    expect(afterReimport.debts[0]?.entries).toHaveLength(1)
+    expect(afterReimport.debts[0]?.entries[0]?.description).toBe("Import détail [période résolue dans l'app: 2024-01]")
+    expect(afterReimport.debts[0]?.outstandingCents).toBe(outstandingAfterResolve)
+  })
+
+  it('dedupes a reimport against a previously stored legacy resolved signature', async () => {
+    const workbook = await parseImportWorkbookFile(buildWorkbookFile('broken-workbook.ods'))
+
+    await applyImportPreview(workbook.preview)
+    const partialSnapshot = await buildSnapshot()
+    const pending = partialSnapshot.unresolvedImports[0]
+    expect(pending).toBeDefined()
+
+    await resolveUnresolvedImport(pending!.id, '2024-01')
+
+    const savedResolutions = await loadSavedImportResolutions(workbook.preview.fingerprint)
+    expect(savedResolutions).toHaveLength(1)
+
+    const storedEntry = (await db.entries.toArray())[0]
+    expect(storedEntry).toBeDefined()
+
+    const legacyDescription = "Paiement sans periode [periode resolue dans l'app: 2024-01]"
+    const legacySignature = createImportEntrySignature({
+      borrowerSourceKey: 'adel',
+      debtSourceKey: 'adel:dette-1',
+      kind: 'payment',
+      amountCents: 30000,
+      periodKey: '2024-01',
+      occurredOn: null,
+      description: legacyDescription,
+    })
+
+    await db.entries.put({
+      ...storedEntry!,
+      description: legacyDescription,
+      signature: legacySignature,
+    })
+
+    const reparsedWorkbook = await parseImportWorkbookFile(buildWorkbookFile('broken-workbook.ods'), {
+      resolutions: savedResolutions,
+    })
+    const second = await applyImportPreview(reparsedWorkbook.preview)
+    const afterReimport = await buildSnapshot()
+
+    expect(second.session.appliedEntries).toBe(0)
+    expect(second.session.duplicateEntries).toBe(1)
+    expect(afterReimport.debts[0]?.entries).toHaveLength(1)
+    expect(afterReimport.debts[0]?.entries[0]?.signature).toBe(legacySignature)
+    expect(afterReimport.debts[0]?.entries[0]?.description).toBe(legacyDescription)
   })
 
   it('adds only unseen debts and borrowers from a later full workbook import', async () => {

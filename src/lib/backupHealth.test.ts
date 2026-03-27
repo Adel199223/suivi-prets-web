@@ -37,7 +37,7 @@ describe('backup health', () => {
 
     const health = deriveBackupHealth(snapshot, volatileStorage)
     expect(health.state).toBe('local_volatile')
-    expect(health.headline).toMatch(/donnees deja enregistrees sur cet appareil/i)
+    expect(health.headline).toMatch(/données déjà enregistrées sur cet appareil/i)
     expect(health.detail).toMatch(/aucune action n’est requise pour continuer/i)
   })
 
@@ -95,7 +95,7 @@ describe('backup health', () => {
           sheetName: 'dette_adel_1',
           rowNumber: 2,
           reasonCode: 'missing_period',
-          reasonMessage: 'Impossible de deduire la periode.',
+          reasonMessage: 'Impossible de déduire la période.',
           signature: 'pending-signature',
           importSessionId: null,
           resolutionPeriodKey: null,
@@ -133,6 +133,6 @@ describe('backup health', () => {
 
     const health = deriveBackupHealth(snapshot, persistedStorage)
     expect(health.state).toBe('backup_current')
-    expect(health.headline).toMatch(/copie de secours a jour/i)
+    expect(health.headline).toMatch(/copie de secours à jour/i)
   })
 })

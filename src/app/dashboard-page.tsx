@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { formatDate, formatMoney } from '../domain/format'
 import { ledgerKindImpactCents } from '../domain/ledger'
 import type { AppSnapshot, BackupHealth, BorrowerView, DebtView, RecentImportOutcome } from '../domain/types'
@@ -19,6 +19,7 @@ interface DashboardPageProps {
   onCollapseImportOutcome: () => void
   onExpandImportOutcome: () => void
   onCreateBorrower: (input: { name: string; notes?: string }) => Promise<void>
+  onOpenSettings: () => void
 }
 
 function isSettledBorrower(borrowerView: BorrowerView): boolean {
@@ -32,12 +33,12 @@ export function DashboardPage({
   isImportOutcomeCollapsed,
   onCollapseImportOutcome,
   onExpandImportOutcome,
-  onCreateBorrower
+  onCreateBorrower,
+  onOpenSettings,
 }: DashboardPageProps) {
   const [name, setName] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [showProtectionDetails, setShowProtectionDetails] = useState(false)
   const [borrowerHistoryMode, setBorrowerHistoryMode] = useState<'active' | 'settled'>('active')
   const [paymentHistoryMode, setPaymentHistoryMode] = useState<'active' | 'settled'>('active')
   const lastImportPendingItems = lastImportOutcome
@@ -66,20 +67,14 @@ export function DashboardPage({
       return {
         payment,
         debtView,
-        isSettledDebt: debtView.outstandingCents <= 0
+        isSettledDebt: debtView.outstandingCents <= 0,
       } satisfies RecentPaymentRow
     })
     .filter((value): value is RecentPaymentRow => value !== null)
   const activePaymentRows = recentPaymentRows.filter((row) => !row.isSettledDebt)
   const settledPaymentRows = recentPaymentRows.filter((row) => row.isSettledDebt)
   const visiblePaymentRows = paymentHistoryMode === 'settled' ? settledPaymentRows : activePaymentRows
-  const showFullProtectionPanel = backupHealth.state === 'backup_stale'
-  const quietProtectionLabel =
-    backupHealth.state === 'empty'
-      ? 'Pret a enregistrer ici'
-      : backupHealth.state === 'backup_current'
-        ? 'Enregistre ici + copie de secours a jour'
-        : 'Enregistre sur cet appareil'
+  const showBackupWarning = backupHealth.state === 'backup_stale'
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -99,40 +94,28 @@ export function DashboardPage({
       <section className="hero-panel">
         <div>
           <p className="eyebrow">Tableau de bord</p>
-          <h1>Suivi Prets</h1>
+          <h1>Suivi Prêts</h1>
           <p className="lede">
-            Suivez plusieurs dettes, ajoutez vite un paiement, fusionnez un import de tableur et gardez une sauvegarde locale propre.
+            Suivez plusieurs dettes, ajoutez vite un paiement et gardez l’essentiel du suivi sous la main.
           </p>
-          {!showFullProtectionPanel ? (
-            <div className="compact-status-row">
-              <span className="status-chip status-chip-neutral">{quietProtectionLabel}</span>
-              <button
-                type="button"
-                className="ghost-button ghost-button-inline"
-                onClick={() => setShowProtectionDetails((current) => !current)}
-              >
-                {showProtectionDetails ? 'Moins de details' : 'Details protection'}
-              </button>
-            </div>
-          ) : null}
         </div>
         <div className="metric-grid">
-          <MetricCard label="Total prete" value={formatMoney(snapshot.totalLentCents)} />
-          <MetricCard label="Total encaisse" value={formatMoney(snapshot.totalPaidCents)} tone="accent" />
-          <MetricCard label="Reste a encaisser" value={formatMoney(snapshot.outstandingCents)} tone="warning" />
+          <MetricCard label="Total prêté" value={formatMoney(snapshot.totalLentCents)} />
+          <MetricCard label="Total encaissé" value={formatMoney(snapshot.totalPaidCents)} tone="accent" />
+          <MetricCard label="Reste à encaisser" value={formatMoney(snapshot.outstandingCents)} tone="warning" />
         </div>
       </section>
 
-      {!showFullProtectionPanel && showProtectionDetails ? (
+      {showBackupWarning ? (
         <section className="section-card section-card-compact">
-          <div className={`notice-panel notice-panel-${backupHealth.state}`}>
-            <strong>{backupHealth.headline}</strong>
+          <div className="notice-panel notice-panel-warning notice-panel-compact">
+            <div className="notice-panel-header">
+              <strong>{backupHealth.headline}</strong>
+              <button type="button" className="ghost-button" onClick={onOpenSettings}>
+                Ouvrir les réglages
+              </button>
+            </div>
             <p className="section-note">{backupHealth.detail}</p>
-            <p className="section-note">
-              {snapshot.lastBackupAt
-                ? `Derniere copie de secours exportee: ${formatDate(snapshot.lastBackupAt)}.`
-                : 'Aucune copie de secours exportee pour l’instant. Ce n’est pas necessaire pour continuer ici.'}
-            </p>
           </div>
         </section>
       ) : null}
@@ -150,26 +133,26 @@ export function DashboardPage({
               <strong>
                 {lastImportOutcome.mode === 'partial'
                   ? lastImportPendingCount > 0
-                    ? 'Import partiel termine: les donnees sures sont deja visibles.'
-                    : 'Import partiel complete: toutes les lignes connues sont maintenant integrees.'
-                  : 'Import termine: les donnees sont visibles dans ce navigateur.'}
+                    ? 'Import partiel terminé: les données sûres sont déjà visibles.'
+                    : 'Import partiel complété: toutes les lignes connues sont maintenant intégrées.'
+                  : 'Import terminé: les données sont visibles dans ce navigateur.'}
               </strong>
               <button type="button" className="ghost-button" onClick={onCollapseImportOutcome}>
-                Masquer ce resume
+                Masquer ce résumé
               </button>
             </div>
             <p className="section-note">Fichier source: {lastImportOutcome.fileName}</p>
             <p className="section-note">
-              {lastImportOutcome.appliedEntries} ligne(s) ajoutee(s)
+              {lastImportOutcome.appliedEntries} ligne(s) ajoutée(s)
               {lastImportOutcome.duplicateEntries > 0
-                ? `, ${lastImportOutcome.duplicateEntries} deja presente(s)`
+                ? `, ${lastImportOutcome.duplicateEntries} déjà présente(s)`
                 : ''}
               {lastImportPendingCount > 0 ? `, ${lastImportPendingCount} encore en attente` : ''}.
             </p>
             {lastImportOutcome.mode === 'partial' ? (
               <p className="section-note">
-                Les emprunteurs et dettes importes sont deja utilisables. Seule la ligne signalee comme en attente reste
-                hors des totaux tant que son mois n’est pas complete.
+                Les emprunteurs et dettes importés sont déjà utilisables. Seule la ligne signalée comme en attente reste
+                hors des totaux tant que son mois n’est pas complété.
               </p>
             ) : null}
             {lastImportPendingCount > 0 ? (
@@ -184,12 +167,12 @@ export function DashboardPage({
                 </Link>
               ))}
               <Link className="inline-link" to="/import">
-                {lastImportPendingCount > 0 ? 'Completer la file d’attente' : 'Voir Import & sauvegarde'}
+                {lastImportPendingCount > 0 ? 'Compléter la file d’attente' : 'Voir Import & sauvegarde'}
               </Link>
             </div>
             {hiddenBorrowerCount > 0 ? (
               <p className="section-note">
-                {hiddenBorrowerCount} autre(s) emprunteur(s) importes sont deja disponibles plus bas dans le tableau de bord.
+                {hiddenBorrowerCount} autre(s) emprunteur(s) importé(s) sont déjà disponibles plus bas dans le tableau de bord.
               </p>
             ) : null}
           </div>
@@ -206,13 +189,13 @@ export function DashboardPage({
             }`}
           >
             <div className="notice-panel-header">
-              <strong>Resume d’import masque</strong>
+              <strong>Résumé d’import masqué</strong>
               <button type="button" className="ghost-button" onClick={onExpandImportOutcome}>
-                Reafficher le resume
+                Réafficher le résumé
               </button>
             </div>
             <p className="section-note">
-              {lastImportOutcome.fileName} · {lastImportOutcome.appliedEntries} ligne(s) ajoutee(s)
+              {lastImportOutcome.fileName} · {lastImportOutcome.appliedEntries} ligne(s) ajoutée(s)
               {lastImportPendingCount > 0 ? ` · ${lastImportPendingCount} encore en attente` : ''}.
             </p>
           </div>
@@ -222,10 +205,9 @@ export function DashboardPage({
       <section className="section-card">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Operation rapide</p>
+            <p className="eyebrow">Opération rapide</p>
             <h2>Ajouter un emprunteur</h2>
           </div>
-          <p className="section-note">Commencez ici avant d’ajouter une ou plusieurs dettes.</p>
         </div>
         <form className="inline-form" onSubmit={handleSubmit}>
           <label>
@@ -236,37 +218,39 @@ export function DashboardPage({
             Notes
             <input aria-label="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
           </label>
-          <button type="submit">Creer l’emprunteur</button>
+          <button type="submit">Créer l’emprunteur</button>
         </form>
         {error ? <p className="inline-error">{error}</p> : null}
       </section>
 
       <div className="split-grid">
         <section className="section-card">
-          <div className="section-heading">
+          <div className="dashboard-card-header">
             <div>
               <p className="eyebrow">Classement</p>
               <h2>Emprunteurs</h2>
             </div>
           </div>
           {snapshot.borrowers.length > 0 ? (
-            <div className="compact-status-row">
-              <button
-                type="button"
-                className={borrowerHistoryMode === 'active' ? '' : 'ghost-button'}
-                aria-pressed={borrowerHistoryMode === 'active'}
-                onClick={() => setBorrowerHistoryMode('active')}
-              >
-                Emprunteurs actifs ({activeBorrowers.length})
-              </button>
-              <button
-                type="button"
-                className={borrowerHistoryMode === 'settled' ? '' : 'ghost-button'}
-                aria-pressed={borrowerHistoryMode === 'settled'}
-                onClick={() => setBorrowerHistoryMode('settled')}
-              >
-                Emprunteurs soldes ({settledBorrowers.length})
-              </button>
+            <div className="dashboard-filter-shell">
+              <div className="compact-status-row dashboard-filter-row">
+                <button
+                  type="button"
+                  className={borrowerHistoryMode === 'active' ? '' : 'ghost-button'}
+                  aria-pressed={borrowerHistoryMode === 'active'}
+                  onClick={() => setBorrowerHistoryMode('active')}
+                >
+                  Emprunteurs actifs ({activeBorrowers.length})
+                </button>
+                <button
+                  type="button"
+                  className={borrowerHistoryMode === 'settled' ? '' : 'ghost-button'}
+                  aria-pressed={borrowerHistoryMode === 'settled'}
+                  onClick={() => setBorrowerHistoryMode('settled')}
+                >
+                  Emprunteurs soldés ({settledBorrowers.length})
+                </button>
+              </div>
             </div>
           ) : null}
           <div className="list-stack">
@@ -275,8 +259,8 @@ export function DashboardPage({
             ) : visibleBorrowers.length === 0 ? (
               <p className="empty-state">
                 {borrowerHistoryMode === 'settled'
-                  ? 'Aucun emprunteur entierement solde pour le moment.'
-                  : 'Tous les emprunteurs avec dettes sont actuellement soldes. Ouvrez l’onglet emprunteurs soldes pour les revoir.'}
+                  ? 'Aucun emprunteur entièrement soldé pour le moment.'
+                  : 'Tous les emprunteurs avec dettes sont actuellement soldés. Ouvrez l’onglet emprunteurs soldés pour les revoir.'}
               </p>
             ) : (
               visibleBorrowers.map((borrowerView) => (
@@ -287,9 +271,9 @@ export function DashboardPage({
                       {borrowerView.debts.length === 0
                         ? 'Aucune dette pour le moment'
                         : isSettledBorrower(borrowerView)
-                          ? 'Toutes les dettes sont soldees'
+                          ? 'Toutes les dettes sont soldées'
                           : `${borrowerView.openDebtCount} dette(s) ouverte(s)`}{' '}
-                      · {formatMoney(borrowerView.totalPaidCents)} deja recu
+                      · {formatMoney(borrowerView.totalPaidCents)} déjà reçu
                     </p>
                   </div>
                   <strong>{formatMoney(borrowerView.outstandingCents)}</strong>
@@ -300,43 +284,47 @@ export function DashboardPage({
         </section>
 
         <section className="section-card">
-          <div className="section-heading">
+          <div className="dashboard-card-header">
             <div>
-              <p className="eyebrow">Flux recent</p>
+              <p className="eyebrow">Flux récent</p>
               <h2>Derniers paiements</h2>
             </div>
-            <Link className="inline-link" to="/import">
-              Import & sauvegarde
-            </Link>
+            <div className="dashboard-card-link-wrap">
+              <Link className="inline-link dashboard-card-link" to="/import">
+                Import & sauvegarde
+              </Link>
+            </div>
           </div>
           {recentPaymentRows.length > 0 ? (
-            <div className="compact-status-row">
-              <button
-                type="button"
-                className={paymentHistoryMode === 'active' ? '' : 'ghost-button'}
-                aria-pressed={paymentHistoryMode === 'active'}
-                onClick={() => setPaymentHistoryMode('active')}
-              >
-                Dettes encore ouvertes ({activePaymentRows.length})
-              </button>
-              <button
-                type="button"
-                className={paymentHistoryMode === 'settled' ? '' : 'ghost-button'}
-                aria-pressed={paymentHistoryMode === 'settled'}
-                onClick={() => setPaymentHistoryMode('settled')}
-              >
-                Dettes soldes ({settledPaymentRows.length})
-              </button>
+            <div className="dashboard-filter-shell">
+              <div className="compact-status-row dashboard-filter-row">
+                <button
+                  type="button"
+                  className={paymentHistoryMode === 'active' ? '' : 'ghost-button'}
+                  aria-pressed={paymentHistoryMode === 'active'}
+                  onClick={() => setPaymentHistoryMode('active')}
+                >
+                  Dettes encore ouvertes ({activePaymentRows.length})
+                </button>
+                <button
+                  type="button"
+                  className={paymentHistoryMode === 'settled' ? '' : 'ghost-button'}
+                  aria-pressed={paymentHistoryMode === 'settled'}
+                  onClick={() => setPaymentHistoryMode('settled')}
+                >
+                  Dettes soldées ({settledPaymentRows.length})
+                </button>
+              </div>
             </div>
           ) : null}
           <div className="list-stack">
             {recentPaymentRows.length === 0 ? (
-              <p className="empty-state">Aucun paiement enregistre.</p>
+              <p className="empty-state">Aucun paiement enregistré.</p>
             ) : visiblePaymentRows.length === 0 ? (
               <p className="empty-state">
                 {paymentHistoryMode === 'settled'
-                  ? 'Aucun paiement recent sur une dette entierement soldee.'
-                  : 'Les paiements recents connus concernent uniquement des dettes deja soldees.'}
+                  ? 'Aucun paiement récent sur une dette entièrement soldée.'
+                  : 'Les paiements récents connus concernent uniquement des dettes déjà soldées.'}
               </p>
             ) : (
               visiblePaymentRows.map((row) => (
@@ -356,29 +344,6 @@ export function DashboardPage({
         </section>
       </div>
 
-      {showFullProtectionPanel ? (
-        <section className="section-card">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Protection</p>
-              <h2>Protection des donnees</h2>
-            </div>
-          </div>
-          <div className={`notice-panel notice-panel-${backupHealth.state}`}>
-            <strong>{backupHealth.headline}</strong>
-            <p className="section-note">{backupHealth.detail}</p>
-            <p className="section-note">
-              {snapshot.lastBackupAt
-                ? `Derniere copie de secours exportee: ${formatDate(snapshot.lastBackupAt)}.`
-                : 'Aucune copie de secours exportee pour l’instant.'}
-            </p>
-            <Link className="inline-link" to="/import">
-              Ouvrir Import & sauvegarde
-            </Link>
-          </div>
-        </section>
-      ) : null}
-
       {snapshot.unresolvedImportCount > 0 ? (
         <section className="section-card">
           <div className="notice-panel notice-panel-warning notice-panel-compact">
@@ -387,12 +352,12 @@ export function DashboardPage({
               <span className="status-chip status-chip-warning">Encore {formatMoney(snapshot.pendingImportedCents)}</span>
             </div>
             <p className="section-note">
-              Les donnees deja fiables sont utilisables maintenant. Seul ce montant attend encore son mois avant
+              Les données déjà fiables sont utilisables maintenant. Seul ce montant attend encore son mois avant
               d’entrer dans les totaux.
             </p>
             <div className="link-chip-row">
               <Link className="inline-link" to="/import">
-                Completer la file d’attente
+                Compléter la file d’attente
               </Link>
             </div>
           </div>

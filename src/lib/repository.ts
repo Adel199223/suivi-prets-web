@@ -18,6 +18,7 @@ import type {
 import { db } from './db'
 import { createImportEntrySignature } from './importSignature'
 import { dedupeImportIssueResolutions, loadSavedImportResolutions, saveSavedImportResolutions } from './importResolutionMemory'
+import { buildResolvedImportDescription } from './resolvedImportDescription'
 
 function createId(): string {
   return crypto.randomUUID()
@@ -130,7 +131,7 @@ export async function createDebt(input: {
 export async function updateDebt(debtId: string, input: { label: string; notes: string }): Promise<void> {
   const label = input.label.trim()
   if (!label) {
-    throw new Error('Ajoutez un libelle de dette.')
+    throw new Error('Ajoutez un libellé de dette.')
   }
 
   const updated = await db.debts.update(debtId, {
@@ -296,11 +297,6 @@ async function ensureImportBorrowerAndDebt(
   }
 
   return { borrower, debt }
-}
-
-function buildResolvedImportDescription(description: string, periodKey: string): string {
-  const normalized = description.trim()
-  return `${normalized || 'Import detail'} [periode resolue dans l'app: ${periodKey}]`
 }
 
 export async function exportBackup(): Promise<AppBackupV2> {
@@ -522,7 +518,7 @@ export async function applyImportPreview(preview: ImportPreview): Promise<ApplyI
 export async function resolveUnresolvedImport(unresolvedImportId: string, periodKey: string): Promise<void> {
   const normalizedPeriodKey = periodKey.trim()
   if (!/^\d{4}-\d{2}$/.test(normalizedPeriodKey)) {
-    throw new Error('Choisissez une periode valide au format AAAA-MM.')
+    throw new Error('Choisissez une période valide au format AAAA-MM.')
   }
 
   await db.transaction('rw', [db.borrowers, db.debts, db.entries, db.unresolvedImports, db.meta], async () => {

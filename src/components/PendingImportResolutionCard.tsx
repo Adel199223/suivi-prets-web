@@ -30,13 +30,13 @@ export function PendingImportResolutionCard({
           {formatMoney(item.amountCents)} · {item.sheetName} · ligne {item.rowNumber}
         </p>
         <p>{item.reasonMessage}</p>
-        <p className="section-note">Cette ligne attend seulement son mois/periode avant d’entrer dans les totaux.</p>
+        <p className="section-note">Cette ligne attend seulement son mois/période avant d’entrer dans les totaux.</p>
         {showFileName ? <p className="section-note">Fichier source: {item.fileName}</p> : null}
       </div>
       <label className="resolution-input">
-        Mois a appliquer
+        Mois à appliquer
         <input
-          aria-label={`Mois a appliquer pour ${item.sheetName} ligne ${item.rowNumber}`}
+          aria-label={`Mois à appliquer pour ${item.sheetName} ligne ${item.rowNumber}`}
           type="month"
           value={periodKey}
           onChange={(event) => onChangePeriodKey(item.id, event.currentTarget.value)}
@@ -45,7 +45,7 @@ export function PendingImportResolutionCard({
       {error ? <p className="inline-error">{error}</p> : null}
       <div className="resolution-actions">
         <button type="button" className="secondary-button" onClick={() => void onResolve(item.id)}>
-          Ajouter cette ligne a la dette
+          Ajouter cette ligne à la dette
         </button>
         {onDelete ? (
           <button
