@@ -180,6 +180,7 @@ function BorrowerRoute(props: {
   onAddEntry: Parameters<typeof BorrowerPage>[0]['onAddEntry']
   onToggleDebtClosed: Parameters<typeof BorrowerPage>[0]['onToggleDebtClosed']
   onUpdateBorrower: Parameters<typeof BorrowerPage>[0]['onUpdateBorrower']
+  onDeleteDebt: Parameters<typeof BorrowerPage>[0]['onDeleteDebt']
   pendingResolutionDrafts: Parameters<typeof BorrowerPage>[0]['pendingResolutionDrafts']
   pendingResolutionErrors: Parameters<typeof BorrowerPage>[0]['pendingResolutionErrors']
   onChangePendingResolution: Parameters<typeof BorrowerPage>[0]['onChangePendingResolution']
@@ -775,6 +776,7 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
               onCollapseImportOutcome={() => setIsImportOutcomeCollapsed(true)}
               onExpandImportOutcome={() => setIsImportOutcomeCollapsed(false)}
               onCreateBorrower={handleCreateBorrower}
+              onDeleteBorrower={handleDeleteBorrower}
               onOpenSettings={() => setIsSettingsOpen(true)}
             />
           }
@@ -788,6 +790,7 @@ export default function App({ runtimeHostname }: { runtimeHostname?: string } = 
               onAddEntry={handleAddEntry}
               onToggleDebtClosed={(debtId, closed) => setDebtClosed(debtId, closed).then(() => announce(closed ? 'Dette clôturée.' : 'Dette rouverte.'))}
               onUpdateBorrower={handleUpdateBorrower}
+              onDeleteDebt={handleDeleteDebt}
               pendingResolutionDrafts={pendingResolutionDrafts}
               pendingResolutionErrors={pendingResolutionErrors}
               onChangePendingResolution={handlePendingResolutionDraftChange}

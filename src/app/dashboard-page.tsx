@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatDate, formatMoney } from '../domain/format'
 import { ledgerKindImpactCents } from '../domain/ledger'
+import { PageActionsMenu } from '../components/PageActionsMenu'
 import type { AppSnapshot, BackupHealth, BorrowerView, DebtView, RecentImportOutcome } from '../domain/types'
 import { MetricCard } from '../components/MetricCard'
 
@@ -19,8 +20,12 @@ interface DashboardPageProps {
   onCollapseImportOutcome: () => void
   onExpandImportOutcome: () => void
   onCreateBorrower: (input: { name: string; notes?: string }) => Promise<void>
+  onDeleteBorrower: (borrowerId: string) => Promise<void>
   onOpenSettings: () => void
 }
+
+type HistoryMode = 'all' | 'active' | 'settled'
+const DEFAULT_VISIBLE_PAYMENT_COUNT = 2
 
 function isSettledBorrower(borrowerView: BorrowerView): boolean {
   return borrowerView.debts.length > 0 && borrowerView.debts.every((debtView) => debtView.outstandingCents <= 0)
@@ -34,13 +39,15 @@ export function DashboardPage({
   onCollapseImportOutcome,
   onExpandImportOutcome,
   onCreateBorrower,
+  onDeleteBorrower,
   onOpenSettings,
 }: DashboardPageProps) {
   const [name, setName] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [borrowerHistoryMode, setBorrowerHistoryMode] = useState<'active' | 'settled'>('active')
-  const [paymentHistoryMode, setPaymentHistoryMode] = useState<'active' | 'settled'>('active')
+  const [borrowerHistoryMode, setBorrowerHistoryMode] = useState<HistoryMode>('all')
+  const [paymentHistoryMode, setPaymentHistoryMode] = useState<HistoryMode>('all')
+  const [isPaymentHistoryExpanded, setIsPaymentHistoryExpanded] = useState(false)
   const lastImportPendingItems = lastImportOutcome
     ? snapshot.unresolvedImports.filter((item) => item.importSessionId === lastImportOutcome.sessionId)
     : []
@@ -56,7 +63,12 @@ export function DashboardPage({
   const hiddenBorrowerCount = Math.max(0, affectedBorrowers.length - highlightedBorrowers.length)
   const activeBorrowers = snapshot.borrowers.filter((borrowerView) => !isSettledBorrower(borrowerView))
   const settledBorrowers = snapshot.borrowers.filter(isSettledBorrower)
-  const visibleBorrowers = borrowerHistoryMode === 'settled' ? settledBorrowers : activeBorrowers
+  const visibleBorrowers =
+    borrowerHistoryMode === 'all'
+      ? snapshot.borrowers
+      : borrowerHistoryMode === 'settled'
+        ? settledBorrowers
+        : activeBorrowers
   const recentPaymentRows = snapshot.recentPayments
     .map((payment) => {
       const debtView = snapshot.debtMap[payment.debtId]
@@ -73,7 +85,18 @@ export function DashboardPage({
     .filter((value): value is RecentPaymentRow => value !== null)
   const activePaymentRows = recentPaymentRows.filter((row) => !row.isSettledDebt)
   const settledPaymentRows = recentPaymentRows.filter((row) => row.isSettledDebt)
-  const visiblePaymentRows = paymentHistoryMode === 'settled' ? settledPaymentRows : activePaymentRows
+  const visiblePaymentRows =
+    paymentHistoryMode === 'all'
+      ? recentPaymentRows
+      : paymentHistoryMode === 'settled'
+        ? settledPaymentRows
+        : activePaymentRows
+  const hasCollapsedPaymentOverflow = visiblePaymentRows.length > DEFAULT_VISIBLE_PAYMENT_COUNT
+  const hiddenPaymentCount = Math.max(0, visiblePaymentRows.length - DEFAULT_VISIBLE_PAYMENT_COUNT)
+  const isPaymentHistoryExpandedVisible = hasCollapsedPaymentOverflow && isPaymentHistoryExpanded
+  const displayedPaymentRows = isPaymentHistoryExpandedVisible
+    ? visiblePaymentRows
+    : visiblePaymentRows.slice(0, DEFAULT_VISIBLE_PAYMENT_COUNT)
   const showBackupWarning = backupHealth.state === 'backup_stale'
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -236,6 +259,14 @@ export function DashboardPage({
               <div className="compact-status-row dashboard-filter-row">
                 <button
                   type="button"
+                  className={borrowerHistoryMode === 'all' ? '' : 'ghost-button'}
+                  aria-pressed={borrowerHistoryMode === 'all'}
+                  onClick={() => setBorrowerHistoryMode('all')}
+                >
+                  Tous ({snapshot.borrowers.length})
+                </button>
+                <button
+                  type="button"
                   className={borrowerHistoryMode === 'active' ? '' : 'ghost-button'}
                   aria-pressed={borrowerHistoryMode === 'active'}
                   onClick={() => setBorrowerHistoryMode('active')}
@@ -260,24 +291,36 @@ export function DashboardPage({
               <p className="empty-state">
                 {borrowerHistoryMode === 'settled'
                   ? 'Aucun emprunteur entièrement soldé pour le moment.'
-                  : 'Tous les emprunteurs avec dettes sont actuellement soldés. Ouvrez l’onglet emprunteurs soldés pour les revoir.'}
+                  : 'Aucun emprunteur actif pour le moment.'}
               </p>
             ) : (
               visibleBorrowers.map((borrowerView) => (
-                <Link className="borrower-row" key={borrowerView.borrower.id} to={`/emprunteurs/${borrowerView.borrower.id}`}>
-                  <div>
-                    <strong>{borrowerView.borrower.name}</strong>
-                    <p>
-                      {borrowerView.debts.length === 0
-                        ? 'Aucune dette pour le moment'
-                        : isSettledBorrower(borrowerView)
-                          ? 'Toutes les dettes sont soldées'
-                          : `${borrowerView.openDebtCount} dette(s) ouverte(s)`}{' '}
-                      · {formatMoney(borrowerView.totalPaidCents)} déjà reçu
-                    </p>
-                  </div>
-                  <strong>{formatMoney(borrowerView.outstandingCents)}</strong>
-                </Link>
+                <article className="borrower-row borrower-row-shell" key={borrowerView.borrower.id}>
+                  <Link className="borrower-row-main" to={`/emprunteurs/${borrowerView.borrower.id}`}>
+                    <div>
+                      <strong>{borrowerView.borrower.name}</strong>
+                      <p>
+                        {borrowerView.debts.length === 0
+                          ? 'Aucune dette pour le moment'
+                          : isSettledBorrower(borrowerView)
+                            ? 'Toutes les dettes sont soldées'
+                            : `${borrowerView.openDebtCount} dette(s) ouverte(s)`}{' '}
+                        · {formatMoney(borrowerView.totalPaidCents)} déjà reçu
+                      </p>
+                    </div>
+                    <strong>{formatMoney(borrowerView.outstandingCents)}</strong>
+                  </Link>
+                  <PageActionsMenu label={`Ouvrir les actions de l’emprunteur ${borrowerView.borrower.name}`}>
+                    <button
+                      type="button"
+                      className="ghost-button danger-button"
+                      role="menuitem"
+                      onClick={() => void onDeleteBorrower(borrowerView.borrower.id)}
+                    >
+                      Supprimer cet emprunteur
+                    </button>
+                  </PageActionsMenu>
+                </article>
               ))
             )}
           </div>
@@ -300,9 +343,23 @@ export function DashboardPage({
               <div className="compact-status-row dashboard-filter-row">
                 <button
                   type="button"
+                  className={paymentHistoryMode === 'all' ? '' : 'ghost-button'}
+                  aria-pressed={paymentHistoryMode === 'all'}
+                  onClick={() => {
+                    setPaymentHistoryMode('all')
+                    setIsPaymentHistoryExpanded(false)
+                  }}
+                >
+                  Tous ({recentPaymentRows.length})
+                </button>
+                <button
+                  type="button"
                   className={paymentHistoryMode === 'active' ? '' : 'ghost-button'}
                   aria-pressed={paymentHistoryMode === 'active'}
-                  onClick={() => setPaymentHistoryMode('active')}
+                  onClick={() => {
+                    setPaymentHistoryMode('active')
+                    setIsPaymentHistoryExpanded(false)
+                  }}
                 >
                   Dettes encore ouvertes ({activePaymentRows.length})
                 </button>
@@ -310,7 +367,10 @@ export function DashboardPage({
                   type="button"
                   className={paymentHistoryMode === 'settled' ? '' : 'ghost-button'}
                   aria-pressed={paymentHistoryMode === 'settled'}
-                  onClick={() => setPaymentHistoryMode('settled')}
+                  onClick={() => {
+                    setPaymentHistoryMode('settled')
+                    setIsPaymentHistoryExpanded(false)
+                  }}
                 >
                   Dettes soldées ({settledPaymentRows.length})
                 </button>
@@ -324,10 +384,10 @@ export function DashboardPage({
               <p className="empty-state">
                 {paymentHistoryMode === 'settled'
                   ? 'Aucun paiement récent sur une dette entièrement soldée.'
-                  : 'Les paiements récents connus concernent uniquement des dettes déjà soldées.'}
+                  : 'Aucun paiement récent sur une dette encore ouverte.'}
               </p>
             ) : (
-              visiblePaymentRows.map((row) => (
+              displayedPaymentRows.map((row) => (
                 <article className="activity-row" key={row.payment.id}>
                   <div>
                     <strong>{formatMoney(row.payment.amountCents)}</strong>
@@ -341,6 +401,13 @@ export function DashboardPage({
               ))
             )}
           </div>
+          {hasCollapsedPaymentOverflow ? (
+            <div className="dashboard-disclosure-row">
+                <button type="button" className="ghost-button" onClick={() => setIsPaymentHistoryExpanded((current) => !current)}>
+                  {isPaymentHistoryExpandedVisible ? 'Masquer le reste' : `Voir les autres paiements (${hiddenPaymentCount})`}
+                </button>
+            </div>
+          ) : null}
         </section>
       </div>
 

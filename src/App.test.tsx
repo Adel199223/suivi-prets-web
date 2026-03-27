@@ -817,6 +817,54 @@ describe('App', () => {
     expect(screen.queryByText('Amina')).not.toBeInTheDocument()
   })
 
+  it('deletes a debt directly from the borrower page debt card', async () => {
+    const borrower = await createBorrower({ name: 'Amina' })
+    await createDebt({
+      borrowerId: borrower.id,
+      label: 'Loyer',
+      openingBalanceCents: 120000,
+      occurredOn: '2026-03-01',
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter initialEntries={[`/emprunteurs/${borrower.id}`]}>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByRole('heading', { name: 'Amina' })
+    await user.click(screen.getByRole('button', { name: /ouvrir les actions de la dette loyer/i }))
+    await user.click(screen.getByRole('menuitem', { name: /supprimer cette dette/i }))
+    expect(window.confirm).toHaveBeenCalled()
+    await screen.findByText(/dette supprimée/i)
+    expect(screen.queryByRole('heading', { name: 'Loyer', level: 3 })).not.toBeInTheDocument()
+  })
+
+  it('deletes a borrower directly from the dashboard list', async () => {
+    const borrower = await createBorrower({ name: 'Amina' })
+    await createDebt({
+      borrowerId: borrower.id,
+      label: 'Loyer',
+      openingBalanceCents: 120000,
+      occurredOn: '2026-03-01',
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByText('Amina')
+    await user.click(screen.getByRole('button', { name: /ouvrir les actions de l’emprunteur amina/i }))
+    await user.click(screen.getByRole('menuitem', { name: /supprimer cet emprunteur/i }))
+    expect(window.confirm).toHaveBeenCalled()
+    await screen.findByText(/emprunteur supprimé/i)
+    expect(screen.queryByText('Amina')).not.toBeInTheDocument()
+  })
+
   it('wipes all local data after the strong typed confirmation from settings', async () => {
     const borrower = await createBorrower({ name: 'Amina' })
     await createDebt({
@@ -887,17 +935,212 @@ describe('App', () => {
     )
 
     await screen.findByText('Amina')
-    expect(screen.queryByText('Bilal')).not.toBeInTheDocument()
+    expect(screen.getByText('Bilal')).toBeInTheDocument()
     expect(screen.getByText(/amina · loyer/i)).toBeInTheDocument()
-    expect(screen.queryByText(/bilal · voiture/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/bilal · voiture/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /emprunteurs actifs \(1\)/i }))
+    await screen.findByText('Amina')
+    expect(screen.queryByText('Bilal')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /emprunteurs soldés \(1\)/i }))
     await screen.findByText('Bilal')
     expect(screen.queryByText('Amina')).not.toBeInTheDocument()
 
+    await user.click(screen.getByRole('button', { name: /dettes encore ouvertes \(1\)/i }))
+    await screen.findByText(/amina · loyer/i)
+    expect(screen.queryByText(/bilal · voiture/i)).not.toBeInTheDocument()
+
     await user.click(screen.getByRole('button', { name: /dettes soldées \(1\)/i }))
     await screen.findByText(/bilal · voiture/i)
     expect(screen.queryByText(/amina · loyer/i)).not.toBeInTheDocument()
     expect(screen.getByText(/paiement bilal/i)).toBeInTheDocument()
+  })
+
+  it('shows only the two newest payment rows by default and lets the user reveal the rest', async () => {
+    await act(async () => {
+      const borrower = await createBorrower({ name: 'Amina' })
+      const debt = await createDebt({
+        borrowerId: borrower.id,
+        label: 'Loyer',
+        openingBalanceCents: 200000,
+        occurredOn: '2026-03-01',
+      })
+      await addLedgerEntry({
+        debtId: debt.id,
+        kind: 'payment',
+        amountCents: 10000,
+        occurredOn: '2026-03-20',
+        description: 'Paiement 20',
+      })
+      await addLedgerEntry({
+        debtId: debt.id,
+        kind: 'payment',
+        amountCents: 10000,
+        occurredOn: '2026-03-19',
+        description: 'Paiement 19',
+      })
+      await addLedgerEntry({
+        debtId: debt.id,
+        kind: 'payment',
+        amountCents: 10000,
+        occurredOn: '2026-03-18',
+        description: 'Paiement 18',
+      })
+      await addLedgerEntry({
+        debtId: debt.id,
+        kind: 'payment',
+        amountCents: 10000,
+        occurredOn: '2026-03-17',
+        description: 'Paiement 17',
+      })
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByText(/paiement 20/i)
+    expect(screen.getByText(/paiement 19/i)).toBeInTheDocument()
+    expect(screen.queryByText(/paiement 18/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/paiement 17/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /voir les autres paiements \(2\)/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /voir les autres paiements \(2\)/i }))
+    await screen.findByText(/paiement 18/i)
+    expect(screen.getByText(/paiement 17/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /masquer le reste/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /masquer le reste/i }))
+    await waitFor(() => {
+      expect(screen.queryByText(/paiement 18/i)).not.toBeInTheDocument()
+    })
+    expect(screen.queryByText(/paiement 17/i)).not.toBeInTheDocument()
+  })
+
+  it('resets the recent-payments disclosure when the payment filter changes', async () => {
+    await act(async () => {
+      const activeBorrower = await createBorrower({ name: 'Amina' })
+      const activeDebt = await createDebt({
+        borrowerId: activeBorrower.id,
+        label: 'Loyer',
+        openingBalanceCents: 500000,
+        occurredOn: '2026-03-01',
+      })
+      await addLedgerEntry({
+        debtId: activeDebt.id,
+        kind: 'payment',
+        amountCents: 10000,
+        occurredOn: '2026-03-12',
+        description: 'Actif 12',
+      })
+      await addLedgerEntry({
+        debtId: activeDebt.id,
+        kind: 'payment',
+        amountCents: 10000,
+        occurredOn: '2026-03-11',
+        description: 'Actif 11',
+      })
+      await addLedgerEntry({
+        debtId: activeDebt.id,
+        kind: 'payment',
+        amountCents: 10000,
+        occurredOn: '2026-03-10',
+        description: 'Actif 10',
+      })
+
+      const settledBorrower = await createBorrower({ name: 'Bilal' })
+      const settledDebt = await createDebt({
+        borrowerId: settledBorrower.id,
+        label: 'Voiture',
+        openingBalanceCents: 30000,
+        occurredOn: '2026-02-01',
+      })
+      await addLedgerEntry({
+        debtId: settledDebt.id,
+        kind: 'payment',
+        amountCents: 10000,
+        occurredOn: '2026-03-22',
+        description: 'Solde 22',
+      })
+      await addLedgerEntry({
+        debtId: settledDebt.id,
+        kind: 'payment',
+        amountCents: 10000,
+        occurredOn: '2026-03-21',
+        description: 'Solde 21',
+      })
+      await addLedgerEntry({
+        debtId: settledDebt.id,
+        kind: 'payment',
+        amountCents: 10000,
+        occurredOn: '2026-03-20',
+        description: 'Solde 20',
+      })
+    })
+
+    const user = userEvent.setup()
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByText(/solde 22/i)
+    await user.click(screen.getByRole('button', { name: /voir les autres paiements \(4\)/i }))
+    await screen.findByText(/solde 20/i)
+    expect(screen.getByText(/actif 12/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /dettes encore ouvertes \(3\)/i }))
+    await screen.findByText(/actif 12/i)
+    expect(screen.getByText(/actif 11/i)).toBeInTheDocument()
+    expect(screen.queryByText(/actif 10/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /voir les autres paiements \(1\)/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /dettes soldées \(3\)/i }))
+    await screen.findByText(/solde 22/i)
+    expect(screen.getByText(/solde 21/i)).toBeInTheDocument()
+    expect(screen.queryByText(/solde 20/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /voir les autres paiements \(1\)/i })).toBeInTheDocument()
+  })
+
+  it('hides the disclosure control when a filtered payment list has two rows or fewer', async () => {
+    await act(async () => {
+      const borrower = await createBorrower({ name: 'Amina' })
+      const debt = await createDebt({
+        borrowerId: borrower.id,
+        label: 'Loyer',
+        openingBalanceCents: 200000,
+        occurredOn: '2026-03-01',
+      })
+      await addLedgerEntry({
+        debtId: debt.id,
+        kind: 'payment',
+        amountCents: 10000,
+        occurredOn: '2026-03-20',
+        description: 'Paiement 20',
+      })
+      await addLedgerEntry({
+        debtId: debt.id,
+        kind: 'payment',
+        amountCents: 10000,
+        occurredOn: '2026-03-19',
+        description: 'Paiement 19',
+      })
+    })
+
+    render(
+      <MemoryRouter>
+        <App />
+      </MemoryRouter>
+    )
+
+    await screen.findByText(/paiement 20/i)
+    expect(screen.getByText(/paiement 19/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /voir les autres paiements/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /masquer le reste/i })).not.toBeInTheDocument()
   })
 })

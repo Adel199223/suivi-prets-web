@@ -651,6 +651,12 @@ h4 {
   flex: 0 1 auto;
 }
 
+.dashboard-disclosure-row {
+  margin-top: 0.9rem;
+  display: flex;
+  justify-content: center;
+}
+
 .inline-form,
 .entry-composer,
 .dual-stack,
@@ -720,6 +726,29 @@ h4 {
 .borrower-row:hover,
 .inline-link:hover {
   color: var(--color-link);
+}
+
+.borrower-row-shell {
+  align-items: stretch;
+}
+
+.borrower-row-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.borrower-row-shell:hover .borrower-row-main {
+  color: var(--color-link);
+}
+
+.debt-card-header-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
 }
 
 .inline-link {
@@ -1182,6 +1211,13 @@ h4 {
   .debt-card-secondary-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .borrower-row-main,
+  .debt-card-header-actions {
+    width: 100%;
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .dashboard-filter-row > button {

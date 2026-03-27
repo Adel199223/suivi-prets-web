@@ -24,6 +24,7 @@ interface BorrowerPageProps {
   onChangePendingResolution: (unresolvedImportId: string, periodKey: string) => void
   onResolvePendingImport: (unresolvedImportId: string) => Promise<void>
   onDeletePendingImport: (unresolvedImportId: string) => Promise<void>
+  onDeleteDebt: (debtId: string) => Promise<void>
   onDeleteBorrower: (borrowerId: string) => Promise<void>
 }
 
@@ -88,10 +89,12 @@ function DebtCard({
   debtView,
   onAddEntry,
   onToggleDebtClosed,
+  onDeleteDebt,
 }: {
   debtView: DebtView
   onAddEntry: BorrowerPageProps['onAddEntry']
   onToggleDebtClosed: BorrowerPageProps['onToggleDebtClosed']
+  onDeleteDebt: BorrowerPageProps['onDeleteDebt']
 }) {
   const [composer, setComposer] = useState<'payment' | 'advance' | null>(null)
 
@@ -102,7 +105,19 @@ function DebtCard({
           <p className="eyebrow">{debtView.debt.status === 'open' ? 'Ouverte' : 'Clôturée'}</p>
           <h3>{debtView.debt.label}</h3>
         </div>
-        <strong>{formatMoney(debtView.outstandingCents)}</strong>
+        <div className="debt-card-header-actions">
+          <strong>{formatMoney(debtView.outstandingCents)}</strong>
+          <PageActionsMenu label={`Ouvrir les actions de la dette ${debtView.debt.label}`}>
+            <button
+              type="button"
+              className="ghost-button danger-button"
+              role="menuitem"
+              onClick={() => void onDeleteDebt(debtView.debt.id)}
+            >
+              Supprimer cette dette
+            </button>
+          </PageActionsMenu>
+        </div>
       </div>
 
       <div className="mini-metrics">
@@ -167,6 +182,7 @@ export function BorrowerPage({
   onAddEntry,
   onToggleDebtClosed,
   onUpdateBorrower,
+  onDeleteDebt,
   pendingResolutionDrafts,
   pendingResolutionErrors,
   onChangePendingResolution,
@@ -345,7 +361,13 @@ export function BorrowerPage({
         </div>
         <div className="list-stack">
           {borrowerView.debts.map((debtView) => (
-            <DebtCard key={debtView.debt.id} debtView={debtView} onAddEntry={onAddEntry} onToggleDebtClosed={onToggleDebtClosed} />
+            <DebtCard
+              key={debtView.debt.id}
+              debtView={debtView}
+              onAddEntry={onAddEntry}
+              onToggleDebtClosed={onToggleDebtClosed}
+              onDeleteDebt={onDeleteDebt}
+            />
           ))}
         </div>
       </section>
