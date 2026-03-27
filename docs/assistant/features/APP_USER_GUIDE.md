@@ -109,10 +109,11 @@ To stop it later: `npm run stop:windows`
 2. Open that emprunteur page and create one or more dettes.
 3. Record each payment or avance on the debtor page or debt page.
 4. Open a debt page to check balance, then edit the debt label or notes if needed.
-5. Open an emprunteur page to update the borrower name/notes, or to delete a debt/borrower if you need cleanup.
-6. Open the import page, choose the `.ods` spreadsheet directly in the app, review the preview, then confirm the import.
-7. If one imported line is still missing a month, you can complete it later from unresolved import cards directly in the app (import page, debt page, or borrower page).
-8. Export a backup before changing browser/device, or after a major session if you want an extra recovery file.
+5. The `Derniers paiements` card starts with the 2 newest rows; use `Voir les autres paiements` when you want the full recent list.
+6. Open an emprunteur page to update the borrower name/notes, delete a debt from its card menu, or delete the borrower from the dashboard or detail page if you need cleanup.
+7. Open the import page, choose the `.ods` spreadsheet directly in the app, review the preview, then confirm the import.
+8. If one imported line is still missing a month, you can complete it later from unresolved import cards directly in the app (import page, debt page, or borrower page).
+9. Export a backup before changing browser/device, or after a major session if you want an extra recovery file.
 
 ## Terms in Plain English
 

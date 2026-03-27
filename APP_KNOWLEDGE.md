@@ -20,7 +20,8 @@ The product is designed around fast daily money tracking:
 - JSON export, restore confirmation, and backup freshness guidance are implemented.
 - Direct in-app `.ods` import with deterministic preview and same-session merge is implemented.
 - Partial `.ods` import is implemented: safe rows land immediately, while unresolved-but-queueable rows stay in a local pending queue until their month is completed.
-- Dashboard, borrower, debt, and import surfaces now use calmer UX: healthy protection states are compact, pending-import details are collapsed by default, and backup/export tools are demoted behind an optional advanced section.
+- Dashboard, borrower, debt, and import surfaces now use calmer UX: healthy protection states are compact, pending-import details are collapsed by default, backup/export tools are demoted behind an optional advanced section, dashboard history filters default to `all`, and the recent-payments card starts with the newest two rows plus an inline reveal control.
+- Borrower deletion is surfaced directly from the dashboard borrower list, and debt deletion is surfaced directly from borrower-page debt cards while repository delete semantics stay unchanged.
 - The WSL-local `.ods` preview generator remains available as an operator fallback for fixtures, regression checks, and exceptional private review work.
 - Fingerprint-guarded local resolution files can patch truly ambiguous workbook rows before preview generation.
 - Docs harness, validators, and a self-contained browser validation harness are implemented.
